@@ -1,0 +1,4 @@
+# webhook$$bc-go;config/config.yml;grok$$
+kafka_brokers: [kafka:9092]
+poll_interval_ms: 1000
+min_profit_margin: 0.5

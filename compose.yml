@@ -1,0 +1,141 @@
+# webhook$$bc-go;compose.yml;grok$$
+services:
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka
+    container_name: bc-kafka
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_PROCESS_ROLES: controller,broker
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENERS: LISTENER_INTERNAL://0.0.0.0:9092,LISTENER_LOCAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: LISTENER_INTERNAL://kafka:9092,LISTENER_LOCAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,LISTENER_INTERNAL:PLAINTEXT,LISTENER_LOCAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: U2hvdyBNZSBEYSBNb25leQ==
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 1073741824
+      KAFKA_LOG_SEGMENT_BYTES: 107374182
+      KAFKA_LOG_CLEANUP_POLICY: delete
+    volumes:
+      - data_kafka:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  akhq:
+    image: tchiotludo/akhq:0.24.0
+    container_name: bc-akhq
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "9094:8080"
+    volumes:
+      - ./config/akhq/application.yml:/app/application.yml:ro
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17.5-alpine
+    container_name: bc-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: bc
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - pg_init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  # streamer:
+  #   build:
+  #     context: .
+  #     dockerfile: cmd/streamer/Dockerfile
+  #   container_name: bc-streamer
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #   environment:
+  #     MIN_PROFIT_MARGIN: "0.5"
+  #     POLL_INTERVAL_MS: "1000"
+  #   volumes:
+  #     - config:/config:ro
+  #   restart: unless-stopped
+
+  # analyzer:
+  #   build:
+  #     context: .
+  #     dockerfile: cmd/analyzer/Dockerfile
+  #   container_name: bc-analyzer
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #   environment:
+  #     MIN_PROFIT_MARGIN: "0.5"
+  #   volumes:
+  #     - config:/config:ro
+  #   restart: unless-stopped
+
+  # executor:
+  #   build:
+  #     context: .
+  #     dockerfile: cmd/executor/Dockerfile
+  #   container_name: bc-executor
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #   environment:
+  #     WALLET_MODE: paper
+  #     MIN_PROFIT_MARGIN: "0.5"
+  #   volumes:
+  #     - config:/config:ro
+  #   restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: cmd/dashboard/Dockerfile
+    container_name: bc-dashboard
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "9000:8080"
+    volumes:
+      - config:/config:ro
+    restart: unless-stopped
+
+volumes:
+  data_kafka:
+    driver: local
+    driver_opts:
+      o: bind
+      type: bind
+      device: ./data/kafka
+  config:
+    driver: local
+    driver_opts:
+      o: bind
+      type: bind
+      device: ./config
+  pg_data:
+    driver: local
+    driver_opts:
+      o: bind
+      type: bind
+      device: ./data/postgres
+  pg_init:
+    driver: local
+    driver_opts:
+      o: bind
+      type: bind
+      device: ./data/sql

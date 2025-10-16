@@ -1,0 +1,10 @@
+# webhook$$bc-go;dashboard/server/config.yml;grok$$
+# local port 29092; internal port 9092
+kafka:
+  brokers: ["0.0.0.0:29092"]
+http:
+  port: :8090
+db:
+  url: postgres://postgres:password@localhost/bc?sslmode=disable
+cors:
+  allowed_origins: ["http://localhost:5173"]
