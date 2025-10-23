@@ -21,7 +21,7 @@ func trackedPairs() (l []string) {
 		b   []byte
 	)
 	if db == nil {
-		db, err = sql.Open("postgres", viper.GetString("db_url"))
+		db, err = sql.Open("postgres", viper.GetString("db.url"))
 		if err != nil {
 			log.Println(err)
 			return l
@@ -38,13 +38,13 @@ func trackedPairs() (l []string) {
 	return l
 }
 
-type Streamer interface {
-	Update() chan Message
+type Stream interface {
+	Start() chan Message
 }
 
 type Binance struct{}
 
-func (f *Binance) Update() chan Message {
+func (s *Binance) Start() chan Message {
 	var (
 		c     = make(chan Message)
 		pairs = trackedPairs()
@@ -85,7 +85,7 @@ func (f *Binance) Update() chan Message {
 
 type Bitfinex struct{}
 
-func (f *Bitfinex) Update() chan Message {
+func (s *Bitfinex) Start() chan Message {
 	c := make(chan Message)
 
 	return c
@@ -93,7 +93,7 @@ func (f *Bitfinex) Update() chan Message {
 
 type Uniswap struct{}
 
-func (f *Uniswap) Update() chan Message {
+func (s *Uniswap) Start() chan Message {
 	c := make(chan Message)
 
 	return c
@@ -101,7 +101,7 @@ func (f *Uniswap) Update() chan Message {
 
 type Coinbase struct{}
 
-func (f *Coinbase) Update() chan Message {
+func (s *Coinbase) Start() chan Message {
 	c := make(chan Message)
 
 	return c
@@ -109,7 +109,7 @@ func (f *Coinbase) Update() chan Message {
 
 type Kraken struct{}
 
-func (f *Kraken) Update() chan Message {
+func (s *Kraken) Start() chan Message {
 	c := make(chan Message)
 
 	return c

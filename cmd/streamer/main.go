@@ -16,8 +16,11 @@ func init() {
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("/config")
+	viper.SetDefault("kafka.brokers", []string{"0.0.0.0:29092"})
+	viper.SetDefault("db.url", "postgres://postgres:password@localhost/bc?sslmode=disable")
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatal(err)
+		log.Println("config not found (using defaults)")
+		log.Println(viper.AllSettings())
 	}
 }
 

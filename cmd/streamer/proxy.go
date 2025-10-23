@@ -15,22 +15,22 @@ type Message struct {
 }
 
 type Proxy struct {
-	producer  sarama.SyncProducer
-	channel   chan Message
-	streamers []Streamer
+	producer sarama.SyncProducer
+	channel  chan Message
+	streams  []Stream
 }
 
 func NewProxy() (p *Proxy, err error) {
 	p = &Proxy{
 		channel: make(chan Message),
-		streamers: []Streamer{
+		streams: []Stream{
 			&Binance{},
 		},
 	}
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
 	if p.producer, err = sarama.NewSyncProducer(
-		viper.GetStringSlice("kafka_brokers"),
+		viper.GetStringSlice("kafka.brokers"),
 		config,
 	); err != nil {
 		return nil, err
@@ -64,12 +64,12 @@ func (p *Proxy) Start() {
 			}
 		}
 	}()
-	for _, f := range p.streamers {
-		go func(f Streamer) {
-			ch := f.Update()
+	for _, s := range p.streams {
+		go func(s Stream) {
+			ch := s.Start()
 			for {
 				p.channel <- <-ch
 			}
-		}(f)
+		}(s)
 	}
 }

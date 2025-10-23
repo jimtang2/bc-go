@@ -1,4 +1,0 @@
-# webhook$$bc-go;cmd/streamer/config.yml;grok$$
-# local port 29092; internal port 9092
-kafka_brokers: ["0.0.0.0:29092"]
-db_url: postgres://postgres:password@localhost/bc?sslmode=disable

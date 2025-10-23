@@ -17,9 +17,14 @@ func init() {
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("/config")
-	viper.SetDefault("http.port", ":8080")
+	viper.SetDefault("http.port", ":8090")
+	viper.SetDefault("kafka.brokers", []string{"0.0.0.0:29092"})
+	viper.SetDefault("db.url", "postgres://postgres:password@localhost/bc?sslmode=disable")
+	viper.SetDefault("cors.allowed_origins", []string{"http://localhost:5173"})
+
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("Error reading config file: %v", err)
+		log.Println("config not found (using defaults)")
+		log.Println(viper.AllSettings())
 	}
 }
 
