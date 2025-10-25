@@ -8,9 +8,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Streamer struct{}
+type Consumer struct{}
 
-func (s *Streamer) stream(in chan interface{}) {
+func (s *Consumer) consume(in chan interface{}) {
 	var (
 		brokers = viper.GetStringSlice("kafka.brokers")
 		config  = sarama.NewConfig()

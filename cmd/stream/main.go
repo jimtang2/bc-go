@@ -1,4 +1,4 @@
-// webhook$$bc-go;cmd/streamer/main.go;grok$$
+// webhook$$bc-go;cmd/stream/main.go;grok$$
 package main
 
 import (
@@ -11,13 +11,12 @@ import (
 )
 
 func init() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	// log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("/config")
 	viper.SetDefault("kafka.brokers", []string{"0.0.0.0:29092"})
-	viper.SetDefault("db.url", "postgres://postgres:password@localhost/bc?sslmode=disable")
 	if err := viper.ReadInConfig(); err != nil {
 		log.Println("config not found (using defaults)")
 		log.Println(viper.AllSettings())
@@ -30,7 +29,7 @@ func main() {
 	} else {
 		go p.Start()
 	}
-	log.Println("streamer running")
+	log.Println("stream on")
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig

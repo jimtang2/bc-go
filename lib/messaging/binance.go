@@ -1,4 +1,6 @@
-package main
+package messaging
+
+import "encoding/json"
 
 // BinanceQuote defines a detailed quote structure for centralized exchanges, including standard market data (https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#individual-symbol-ticker-streams)
 /*{
@@ -26,7 +28,17 @@ package main
   "L": 18150,         // Last trade Id
   "n": 18151          // Total number of trades
 }*/
-type BinanceQuote struct {
+type BinanceTickerCombined struct {
+	Stream string        `json:"stream"`
+	Data   BinanceTicker `json:"data"`
+}
+
+type BinanceCombinedMinimal struct {
+	Stream string      `json:"stream"`
+	Data   interface{} `json:"-"` // empty for unmarshal speed
+}
+
+type BinanceTicker struct {
 	EventType          string `json:"e"` // Event type
 	EventTime          int64  `json:"E"` // Event time
 	Symbol             string `json:"s"` // Symbol
@@ -50,4 +62,12 @@ type BinanceQuote struct {
 	FirstTradeID       int64  `json:"F"` // First trade ID
 	LastTradeID        int64  `json:"L"` // Last trade ID
 	TradeCount         int64  `json:"n"` // Total number of trades
+}
+
+func BinanceTickerCombinedStream(b []byte) (string, error) {
+	v := BinanceCombinedMinimal{}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return "", err
+	}
+	return v.Stream, nil
 }

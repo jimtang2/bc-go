@@ -39,7 +39,7 @@ services:
     ports:
       - "9094:8080"
     volumes:
-      - ./config/akhq/application.yml:/app/application.yml:ro
+      - ./deploy/config/akhq/application.yml:/app/application.yml:ro
     restart: unless-stopped
 
   postgres:
@@ -56,11 +56,11 @@ services:
       - "5432:5432"
     restart: unless-stopped
 
-  # streamer:
+  # stream:
   #   build:
   #     context: .
-  #     dockerfile: docker/streamer.dockerfile
-  #   container_name: bc_streamer
+  #     dockerfile: deploy/docker/stream.dockerfile
+  #   container_name: bc_stream
   #   depends_on:
   #     kafka:
   #       condition: service_healthy
@@ -71,11 +71,11 @@ services:
   #     - config:/config:ro
   #   restart: unless-stopped
 
-  # trader:
+  # trade:
   #   build:
   #     context: .
-  #     dockerfile: docker/trader.dockerfile
-  #   container_name: bc_trader
+  #     dockerfile: deploy/docker/trade.dockerfile
+  #   container_name: bc_trade
   #   depends_on:
   #     kafka:
   #       condition: service_healthy
@@ -83,19 +83,19 @@ services:
   #     - config:/config:ro
   #   restart: unless-stopped
 
-  dashboard:
-    build:
-      context: .
-      dockerfile: docker/dashboard.dockerfile
-    container_name: bc_dashboard
-    depends_on:
-      kafka:
-        condition: service_healthy
-    ports:
-      - "9000:8080"
-    volumes:
-      - config:/config:ro
-    restart: unless-stopped
+  # dashboard:
+  #   build:
+  #     context: .
+  #     dockerfile: deploy/docker/dashboard.dockerfile
+  #   container_name: bc_dashboard
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #   ports:
+  #     - "9000:8080"
+  #   volumes:
+  #     - config:/config:ro
+  #   restart: unless-stopped
 
 volumes:
   data_kafka:
@@ -109,7 +109,7 @@ volumes:
     driver_opts:
       o: bind
       type: bind
-      device: ./config
+      device: ./deploy/config
   pg_data:
     driver: local
     driver_opts:
@@ -121,4 +121,4 @@ volumes:
     driver_opts:
       o: bind
       type: bind
-      device: ./data/sql
+      device: ./deploy/sql

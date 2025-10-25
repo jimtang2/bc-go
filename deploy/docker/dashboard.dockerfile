@@ -1,4 +1,4 @@
-# webhook$$bc-go;dashboard/server/Dockerfile;grok$$
+# webhook$$bc-go;deploy/docker/dashboard.dockerfile;grok$$
 FROM golang:1.25.1-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./

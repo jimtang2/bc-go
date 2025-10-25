@@ -1,30 +1,31 @@
-// webhook$$bc-go;cmd/streamer/proxy.go;grok$$
+// webhook$$bc-go;cmd/stream/proxy.go;grok$$
 package main
 
 import (
 	"log"
 
 	"github.com/IBM/sarama"
+	"github.com/jimtang2/bc-go/lib/stream"
 	"github.com/spf13/viper"
 )
 
-type Message struct {
-	Key     string
-	Headers map[string]string
-	Payload []byte
-}
-
 type Proxy struct {
 	producer sarama.SyncProducer
-	channel  chan Message
-	streams  []Stream
+	channel  chan stream.Message
+	streams  []stream.Stream
 }
 
 func NewProxy() (p *Proxy, err error) {
 	p = &Proxy{
-		channel: make(chan Message),
-		streams: []Stream{
-			&Binance{},
+		channel: make(chan stream.Message),
+		streams: []stream.Stream{
+			&stream.Binance{},
+			&stream.Bitfinex{},
+			&stream.Coinbase{},
+			&stream.Kraken{},
+			&stream.OKX{},
+			// &stream.Gemini{},
+			// &stream.Uniswap{},
 		},
 	}
 	config := sarama.NewConfig()
@@ -38,9 +39,9 @@ func NewProxy() (p *Proxy, err error) {
 	return p, nil
 }
 
-func (p *Proxy) write(m Message) error {
+func (p *Proxy) write(m stream.Message) error {
 	message := &sarama.ProducerMessage{
-		Topic: "quotes",
+		Topic: m.Topic,
 		Key:   sarama.StringEncoder(m.Key),
 		Value: sarama.ByteEncoder(m.Payload),
 	}
@@ -65,7 +66,7 @@ func (p *Proxy) Start() {
 		}
 	}()
 	for _, s := range p.streams {
-		go func(s Stream) {
+		go func(s stream.Stream) {
 			ch := s.Start()
 			for {
 				p.channel <- <-ch

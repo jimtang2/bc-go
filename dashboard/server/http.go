@@ -3,14 +3,12 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
 	_ "github.com/lib/pq"
-	"github.com/spf13/viper"
 )
 
 var upgrader = websocket.Upgrader{
@@ -23,7 +21,7 @@ type SocketHandler struct {
 	in       chan interface{}
 	subs     map[*http.Request]chan interface{}
 	mu       sync.Mutex
-	streamer *Streamer
+	consumer *Consumer
 }
 
 func NewSocketHandler() *SocketHandler {
@@ -31,10 +29,10 @@ func NewSocketHandler() *SocketHandler {
 		in:       make(chan interface{}),
 		subs:     map[*http.Request]chan interface{}{},
 		mu:       sync.Mutex{},
-		streamer: &Streamer{},
+		consumer: &Consumer{},
 	}
 	go h.proxy()
-	go h.streamer.stream(h.in)
+	go h.consumer.consume(h.in)
 	return h
 }
 
@@ -98,21 +96,9 @@ func (h *SocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var db *sql.DB
-
 func serveListsFunc(w http.ResponseWriter, r *http.Request) {
-	if db == nil {
-		var err error
-		db, err = sql.Open("postgres", viper.GetString("db.url"))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-	var b []byte
-	if err := db.QueryRow(`select jsonb_build_object(
-  'exchanges', (select array_to_json(array_agg(id)) from exchanges),
-  'pairs', (select array_to_json(array_agg(name)) from pairs))`).Scan(&b); err != nil {
+	b, err := db.lists()
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

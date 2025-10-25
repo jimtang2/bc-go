@@ -1,4 +1,4 @@
-// webhook$$bc-go;cmd/analyzer/main.go;grok$$
+// webhook$$bc-go;cmd/trade/main.go;grok$$
 package main
 
 import (
@@ -10,26 +10,25 @@ import (
 	"github.com/spf13/viper"
 )
 
-// init function for global scope configu
 func init() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("/config")
+	viper.SetDefault("kafka.brokers", []string{"0.0.0.0:29092"})
+	viper.SetDefault("db.url", "postgres://postgres:password@localhost/bc?sslmode=disable")
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("Error reading config file: %v", err)
+		log.Println("config not found (using defaults)")
+		log.Println(viper.AllSettings())
 	}
-
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 }
 
 // orchestration of main app objects
 // set up kafka client aka Producer
 // the producer simply listens to quote messages on a channel that is passed to all the quote fetchers and pushes the messages on the quotes topic
 func main() {
-	c := NewConsumer()
-	go c.Consume()
-
+	log.Println("trade on")
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
