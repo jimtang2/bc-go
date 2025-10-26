@@ -15,7 +15,7 @@ func (s *Consumer) consume(in chan interface{}) {
 		brokers = viper.GetStringSlice("kafka.brokers")
 		config  = sarama.NewConfig()
 	)
-	config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	config.Consumer.Offsets.Initial = sarama.OffsetNewest
 	consumer, err := sarama.NewConsumer(brokers, config)
 	if err != nil {
 		log.Println(err)
@@ -23,14 +23,15 @@ func (s *Consumer) consume(in chan interface{}) {
 		return
 	}
 	defer consumer.Close()
-	partitionList, err := consumer.Partitions("quotes")
+	topic := "tickers"
+	partitionList, err := consumer.Partitions(topic)
 	if err != nil {
 		log.Println(err)
 		close(in)
 		return
 	}
 	for _, partition := range partitionList {
-		pc, err := consumer.ConsumePartition("quotes", partition, sarama.OffsetOldest)
+		pc, err := consumer.ConsumePartition(topic, partition, sarama.OffsetNewest)
 		if err != nil {
 			log.Println(err)
 			continue

@@ -11,17 +11,19 @@ import (
 	"github.com/jimtang2/bc-go/lib/db"
 )
 
-type Bitfinex struct {
-	pairs map[int]BitfinexSubscriptionMessage
-	mu    sync.Mutex
+type BitfinexStream struct {
+	// bitfinex uses an id in payloads instead of the pair text; this requires caching the subscription event message
+	subscriptions map[int]BitfinexEventMessage
+	mu            sync.Mutex
+	parser        *BitfinexParser
 }
 
 // https://docs.bitfinex.com/docs/ws-general#subscribe-to-channels
-func (s *Bitfinex) Start() chan Message {
-	s.pairs = map[int]BitfinexSubscriptionMessage{}
+func (s *BitfinexStream) Start() chan Message {
+	s.subscriptions = map[int]BitfinexEventMessage{}
 	s.mu = sync.Mutex{}
 	c := make(chan Message)
-	trackedPairs := db.TrackedPairs("bitfinex")
+	pairs := db.TrackedPairs("bitfinex")
 	url := "wss://api-pub.bitfinex.com/ws/2"
 	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
@@ -33,96 +35,131 @@ func (s *Bitfinex) Start() chan Message {
 		"event":   "subscribe",
 		"channel": "ticker",
 	}
-	for _, pair := range trackedPairs {
+	for _, pair := range pairs {
 		subscribeMsg["symbol"] = "t" + pair
 		if err := ws.WriteJSON(subscribeMsg); err != nil {
 			log.Println("[bitfinex]", err)
 		}
 	}
-	log.Println("[bitfinex] subscribed to", strings.Join(trackedPairs, ", "))
+	log.Println("[bitfinex] subscribed to", strings.Join(pairs, ", "))
 	go func() {
 		defer ws.Close()
 		for {
-			messageType, b, err := ws.ReadMessage()
+			_, b, err := ws.ReadMessage()
 			if err != nil {
 				log.Println(err)
 				return
 			}
-			switch messageType {
-			// bitfinex uses only one message type
-			case websocket.TextMessage:
-				if len(b) == 0 {
-					log.Println("[bitfinex] unexpected empty message")
+			if len(b) == 0 {
+				log.Println("[bitfinex] unexpected empty message")
+				continue
+			}
+			firstChar := string(b[0])
+			if firstChar == "{" {
+				m, err := s.parser.EventMessage(b)
+				if err != nil {
+					log.Println(err)
 					continue
 				}
-				switch string(b[0]) {
-				// json object type means subscription message
-				case "{":
-					m, err := parseBitfinexSubscriptionMessage(b)
-					if err != nil {
-						log.Println(err)
-						continue
-					}
-					switch m.Event {
-					case "subscribed":
-						s.mu.Lock()
-						s.pairs[m.ChanID] = m
-						s.mu.Unlock()
-						log.Println("[bitfinex] subscribed to", m.Pair)
-					case "info":
-						switch m.Code {
-						case 20051: // need restart websocket connection
-						case 20060: // maintenance start
-						case 20061: // maintenance end
-						default:
-							log.Println("[bitfinex]", string(b))
-						}
-
-					default:
-					}
-				// json array type can be ticker, heartbeat
-				case "[":
-					pairID, val, err := parseBitfinexTickerMessage(b)
-					if err != nil {
-						log.Println(err)
-						continue
-					}
-					if _, ok := val.(string); ok {
-						continue
-					}
+				if m.Event == "subscribed" {
 					s.mu.Lock()
-					p, ok := s.pairs[pairID]
+					s.subscriptions[m.ChanID] = m
 					s.mu.Unlock()
-					if !ok {
-						continue
-					}
+					log.Println("[bitfinex] subscribed to", m.Pair)
+				} else if m.Event == "info" {
+					// 20051: need restart websocket connection
+					// 20060: maintenance start
+					// 20061: maintenance end
+					log.Printf("[bitfinex] [%v] %v", m.Code, string(b))
+				}
+			} else if firstChar == "[" {
+				chanID, isHeartbeat, err := s.parser.ChanID(b)
+				if err != nil {
+					log.Println("[bitfinex]", err)
+					continue
+				} else if isHeartbeat {
+					continue
+				}
+				s.mu.Lock()
+				m, ok := s.subscriptions[chanID]
+				s.mu.Unlock()
+				if !ok {
+					log.Println("[bitfinex] unexpected chanID not set:", string(b))
+					continue
+				}
+				go func() {
 					c <- Message{
-						Topic: "tickers",
-						Key:   "[bitfinex]" + p.Pair,
+						Topic: "tickers_raw",
+						Key:   "[bitfinex]" + m.Pair,
 						Headers: map[string]string{
 							"exchange": "bitfinex",
-							"api":      "ticker stream",
-							"chanId":   fmt.Sprintf(`%v`, p.ChanID),
-							"channel":  p.Channel,
-							"symbol":   p.Symbol,
-							"pair":     p.Pair,
-							"event":    p.Event,
+							"pair":     m.Pair,
 						},
 						Payload: b,
 					}
-				default:
-
-				}
-			case websocket.PingMessage:
-			case websocket.CloseMessage:
-			default:
+				}()
+				go func() {
+					v, err := (&BitfinexParser{}).Ticker(b)
+					if err != nil {
+						log.Println(err)
+						return
+					}
+					t := v.Ticker().Fmt()
+					t.Pair = m.Pair
+					if !t.IsValid() {
+						return
+					}
+					c <- Message{
+						Topic:   "tickers",
+						Key:     t.Key(),
+						Payload: t.Bytes(),
+					}
+				}()
 			}
 		}
 	}()
 	return c
 }
 
-type BitfinexSubscriptionMessage struct {
+/*
+Index 	Field 	Type 	Description
+[0]	BID	Float	Price of last highest bid
+[1]	BID_SIZE	Float	Sum of the 25 highest bid sizes
+[2]	ASK	Float	Price of last lowest ask
+[3]	ASK_SIZE	Float	Sum of the 25 lowest ask sizes
+[4]	DAILY_CHANGE	Float	Amount that the last price has changed since yesterday
+[5]	DAILY_CHANGE_RELATIVE	Float	Relative price change since yesterday (*100 for percentage change)
+[6]	LAST_PRICE	Float	Price of the last trade.
+[7]	VOLUME	Float	Daily volume
+[8]	HIGH	Float	Daily high
+[9]	LOW	Float	Daily low
+*/
+type BitfinexTicker struct {
+	ChanID              float64
+	Bid                 float64
+	BidSize             float64
+	Ask                 float64
+	AskSize             float64
+	DailyChange         float64
+	DailyChangeRelative float64
+	LastPrice           float64
+	Volume              float64
+	High                float64
+	Low                 float64
+}
+
+func (v *BitfinexTicker) Ticker() *Ticker {
+	t := Ticker{
+		Exchange: "bitfinex",
+	}
+	t.Bid = v.Bid
+	t.BidSize = v.BidSize
+	t.Ask = v.Ask
+	t.AskSize = v.AskSize
+	return &t
+}
+
+type BitfinexEventMessage struct {
 	Event   string `json:"event"`
 	Channel string `json:"channel"`
 	ChanID  int    `json:"chanId"`
@@ -132,17 +169,49 @@ type BitfinexSubscriptionMessage struct {
 	Code    int    `json:"code"`
 }
 
-func parseBitfinexSubscriptionMessage(b []byte) (BitfinexSubscriptionMessage, error) {
-	v := BitfinexSubscriptionMessage{}
+type BitfinexParser struct{}
+
+func (p *BitfinexParser) EventMessage(b []byte) (BitfinexEventMessage, error) {
+	v := BitfinexEventMessage{}
 	err := json.Unmarshal(b, &v)
 	return v, err
 }
 
 // https://docs.bitfinex.com/reference/ws-public-ticker
-func parseBitfinexTickerMessage(b []byte) (int, interface{}, error) {
+// bitfinex websocket sends as response arrays of items that either number, string or array of number; e.g.: [1234,"hb"] or [1234,[1,2,3,4,5,6,7,8,9,10]]
+// this function returns the channel id integer, a boolean indicating whether message is heartbeat, and error
+func (p *BitfinexParser) ChanID(b []byte) (int, bool, error) {
 	var v []interface{}
 	if err := json.Unmarshal(b, &v); err != nil {
-		return 0, nil, err
+		return 0, false, err
 	}
-	return int(v[0].(float64)), v[1], nil
+	_, isHeartbeat := v[1].(string)
+	return int(v[0].(float64)), isHeartbeat, nil
+}
+
+func (p *BitfinexParser) Ticker(b []byte) (*BitfinexTicker, error) {
+	v := []interface{}{}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return nil, err
+	}
+	if len(v) < 2 {
+		return nil, fmt.Errorf("unexpected data length:", len(v))
+	}
+	vv, ok := v[1].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected data content", string(b))
+	}
+	return &BitfinexTicker{
+		ChanID:              v[0].(float64),
+		Bid:                 vv[0].(float64),
+		BidSize:             vv[1].(float64),
+		Ask:                 vv[2].(float64),
+		AskSize:             vv[3].(float64),
+		DailyChange:         vv[4].(float64),
+		DailyChangeRelative: vv[5].(float64),
+		LastPrice:           vv[6].(float64),
+		Volume:              vv[7].(float64),
+		High:                vv[8].(float64),
+		Low:                 vv[9].(float64),
+	}, nil
 }

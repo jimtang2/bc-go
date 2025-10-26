@@ -17,9 +17,8 @@ func init() {
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("/config")
-	viper.SetDefault("http.port", ":8090")
+	viper.SetDefault("http.port", ":8080")
 	viper.SetDefault("kafka.brokers", []string{"0.0.0.0:29092"})
-	viper.SetDefault("db.url", "postgres://postgres:password@localhost/bc?sslmode=disable")
 	viper.SetDefault("cors.allowed_origins", []string{"http://localhost:5173"})
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -31,7 +30,6 @@ func init() {
 func main() {
 	http.Handle("/", http.FileServer(http.Dir("dist")))
 	http.Handle("/ws", NewSocketHandler())
-	http.HandleFunc("/lists", http.HandlerFunc(serveListsFunc))
 	log.Println("dashboard listening on", viper.GetString("http.port"))
 	if err := http.ListenAndServe(viper.GetString("http.port"), cors.New(cors.Options{
 		AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),

@@ -95,13 +95,3 @@ func (h *SocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
-
-func serveListsFunc(w http.ResponseWriter, r *http.Request) {
-	b, err := db.lists()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(b)
-}

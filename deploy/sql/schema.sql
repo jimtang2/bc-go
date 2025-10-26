@@ -71,8 +71,6 @@ insert into pairs (exchange, name) values
     ('kraken', 'ETH/USDC'),
     ('kraken', 'SOL/USDT'),
     ('kraken', 'SOL/USDC'),
-    ('kraken', 'TRX/SDT'),
-    ('kraken', 'TRX/USDC'),
     ('kraken', 'XRP/USDT'),
     ('kraken', 'XRP/USDC'),
     ('okx', 'ADA-USDT'),

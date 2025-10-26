@@ -11,7 +11,6 @@ import (
 )
 
 func init() {
-	// log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
@@ -24,11 +23,12 @@ func init() {
 }
 
 func main() {
-	if p, err := NewProxy(); err != nil {
+	proxy, err := NewProxy()
+	if err != nil {
 		log.Fatal(err)
-	} else {
-		go p.Start()
 	}
+	go proxy.Stream()
+	go proxy.Produce()
 	log.Println("stream on")
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
