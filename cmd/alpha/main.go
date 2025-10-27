@@ -2,19 +2,16 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/IBM/sarama"
-	"github.com/jimtang2/bc-go/lib/stream"
 	"github.com/spf13/viper"
 )
 
 func init() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
@@ -28,15 +25,14 @@ func init() {
 
 func main() {
 	var (
-		err      error
-		consumer sarama.Consumer
-		producer sarama.SyncProducer
-		parser   = &stream.Parser{}
-		channel  = make(chan *sarama.ConsumerMessage)
-		topicIn  = "tickers_raw"
-		topicOut = "tickers"
-		brokers  = viper.GetStringSlice("kafka.brokers")
-		config   = sarama.NewConfig()
+		err       error
+		brokers   = viper.GetStringSlice("kafka.brokers") // kafka brokers
+		config    = sarama.NewConfig()                    // kafka config
+		topicIn   = "tickers"                             // consumer topic
+		topicOut  = "alpha"                               // producer topic
+		consumer  sarama.Consumer                         // kafka consumer
+		producer  sarama.SyncProducer                     // kafka producer
+		processor = NewProcessor()                        // stream processor
 	)
 	config.Producer.Return.Successes = true
 	if consumer, err = sarama.NewConsumer(brokers, config); err != nil {
@@ -45,6 +41,7 @@ func main() {
 	if producer, err = sarama.NewSyncProducer(brokers, config); err != nil {
 		log.Fatal(err)
 	}
+	// consumption
 	go func() {
 		defer consumer.Close()
 		partitionList, err := consumer.Partitions(topicIn)
@@ -59,23 +56,26 @@ func main() {
 			}
 			go func(pc sarama.PartitionConsumer) {
 				for {
-					channel <- <-pc.Messages()
+					s := <-pc.Messages()
+					processor.Process(s)
 				}
 			}(pc)
 		}
+		select {}
+	}()
+	// production
+	go func() {
 		for {
-			t := parser.Parse(<-channel)
-			if t == nil {
-				continue
-			}
-			b, _ := json.Marshal(t)
+			output := <-processor.out
 			message := &sarama.ProducerMessage{
 				Topic: topicOut,
-				Key:   sarama.StringEncoder(t.Key()),
-				Value: sarama.ByteEncoder(b),
+				Key:   sarama.StringEncoder(output.Key()),
+				Value: sarama.ByteEncoder(output.Bytes()),
 			}
-			if _, _, err := producer.SendMessage(message); err != nil {
-				log.Println(err)
+			if true {
+				if _, _, err := producer.SendMessage(message); err != nil {
+					log.Println(err)
+				}
 			}
 		}
 	}()
