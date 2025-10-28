@@ -41,7 +41,23 @@ func NewProxy() (*Proxy, error) {
 
 func (p *Proxy) Produce() {
 	for {
-		_, _, err := p.producer.SendMessage(p.NewMessage(<-p.channel))
+		var (
+			sm = <-p.channel // receive stream.Message
+			m  = &sarama.ProducerMessage{
+				Topic: sm.Topic,
+				Key:   sarama.StringEncoder(sm.Key),
+				Value: sarama.ByteEncoder(sm.Payload),
+			}
+		)
+		if sm.Headers != nil {
+			for k, v := range sm.Headers {
+				m.Headers = append(m.Headers, sarama.RecordHeader{
+					Key:   sarama.ByteEncoder(k),
+					Value: sarama.ByteEncoder(v),
+				})
+			}
+		}
+		_, _, err := p.producer.SendMessage(m)
 		if err != nil {
 			log.Println("[proxy]", err)
 		}
@@ -58,21 +74,4 @@ func (p *Proxy) Stream() {
 		}(s)
 	}
 	select {}
-}
-
-func (p *Proxy) NewMessage(sm stream.Message) *sarama.ProducerMessage {
-	m := &sarama.ProducerMessage{
-		Topic: sm.Topic,
-		Key:   sarama.StringEncoder(sm.Key),
-		Value: sarama.ByteEncoder(sm.Payload),
-	}
-	if sm.Headers != nil {
-		for k, v := range sm.Headers {
-			m.Headers = append(m.Headers, sarama.RecordHeader{
-				Key:   sarama.ByteEncoder(k),
-				Value: sarama.ByteEncoder(v),
-			})
-		}
-	}
-	return m
 }

@@ -2,31 +2,23 @@ package stream
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"strconv"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/jimtang2/bc-go/lib/db"
 )
 
 type OKXStream struct {
-	parser *OKXParser
+	messages chan Message
 }
 
 func (s *OKXStream) Start() chan Message {
-	s.parser = &OKXParser{}
-	c := make(chan Message)
-	url := "wss://ws.okx.com:8443/ws/v5/public"
-	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
+	s.messages = make(chan Message)
+	ws, err := s.subscribe()
 	if err != nil {
 		log.Println("[okx]", err)
-		return c
-	}
-	if err := OKXSubscribe(ws); err != nil {
-		log.Println("[okx]", err)
-		return c
+		return s.messages
 	}
 	go func() {
 		defer ws.Close()
@@ -36,50 +28,55 @@ func (s *OKXStream) Start() chan Message {
 				log.Println("[okx]", err)
 				return
 			}
-			m, err := s.parser.Response(b)
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-			if m.Event == "subscribe" {
-				log.Println("[okx] subscribed to", m.Arg.InstID)
-				continue
-			}
-			if m.Arg.Channel == "tickers" {
-				go func() {
-					c <- Message{
-						Topic: "tickers_raw",
-						Key:   fmt.Sprintf("[okx]%s", m.Arg.InstID),
-						Headers: map[string]string{
-							"exchange":  "okx",
-							"pair":      m.Arg.InstID,
-							"api":       "spot order book market data tickers channel",
-							"timestamp": fmt.Sprintf("%v", time.Now().UnixMilli()),
-						},
-						Payload: b,
-					}
-				}()
-				go func() {
-					v, err := (&OKXParser{}).Ticker(b)
-					if err != nil {
-						log.Println(err)
-						return
-					}
-					t := v.Ticker().Fmt()
-					if !t.IsValid() {
-						return
-					}
-					c <- Message{
-						Topic:   "tickers",
-						Key:     t.Key(),
-						Payload: t.Bytes(),
-					}
-				}()
-			}
+			go s.send(b)
 		}
 	}()
+	return s.messages
+}
 
-	return c
+// OKX requires subscription in JSON format with op: "subscribe"
+// https://www.okx.com/docs-v5/en/?language=shell#order-book-trading-market-data-ws-tickers-channel
+func (s *OKXStream) subscribe() (*websocket.Conn, error) {
+	ws, _, err := websocket.DefaultDialer.Dial("wss://ws.okx.com:8443/ws/v5/public", nil)
+	if err != nil {
+		return nil, err
+	}
+	m := struct {
+		Op   string        `json:"op"`
+		Args []interface{} `json:"args"`
+	}{}
+	m.Op = "subscribe"
+	args := []interface{}{}
+	for _, pair := range db.TrackedPairs("okx") {
+		args = append(args, map[string]interface{}{
+			"channel":  "tickers",
+			"instId":   pair,
+			"instType": "SPOT",
+		})
+	}
+	m.Args = args
+	return ws, ws.WriteJSON(m)
+}
+
+func (s *OKXStream) send(b []byte, args ...interface{}) {
+	v := OKXTicker{}
+	if err := json.Unmarshal(b, &v); err != nil {
+		log.Println("[okx]", err)
+		return
+	}
+	if v.Event == "subscribe" {
+		return
+	} else if v.Arg.Channel == "tickers" {
+		t, ok := v.Ticker().Fmt()
+		if !ok {
+			return
+		}
+		s.messages <- Message{
+			Topic:   "tickers",
+			Key:     t.Key(),
+			Payload: t.Bytes(),
+		}
+	}
 }
 
 /*
@@ -109,16 +106,6 @@ If it is SPOT/MARGIN, the value is the quantity in base currency.
 > sodUtc8 	String 	Open price in the UTC 8
 > ts 	String 	Ticker data generation time, Unix timestamp format in milliseconds, e.g. 1597026383085
 */
-type OKXResponse struct {
-	Event string `json:"event"` // subscribe, unsubscribe, error
-	Arg   struct {
-		Channel string `json:"channel"`
-		InstID  string `json:"instId"`
-	} `json:"arg"`
-	Code   string `json:"code"`
-	Msg    string `json:"msg"`
-	ConnID string `json:"connId"`
-}
 
 /*
 		{
@@ -147,7 +134,11 @@ type OKXResponse struct {
 	}
 */
 type OKXTicker struct {
-	Arg struct {
+	Event  string `json:"event"`  // from event response, missing in ticker; values are subscribe, unsubscribe, error
+	Code   string `json:"code"`   // from event response, missing in ticker
+	Msg    string `json:"msg"`    // from event response, missing in ticker
+	ConnID string `json:"connId"` // from event response, missing in ticker
+	Arg    struct {
 		Channel string `json:"channel"`
 		InstID  string `json:"instId"`
 	} `json:"arg"`
@@ -182,38 +173,4 @@ func (v *OKXTicker) Ticker() *Ticker {
 	t.AskSize, _ = strconv.ParseFloat(v.Data[0].AskSz, 64)
 	t.EventTime, _ = strconv.ParseInt(v.Data[0].Ts, 10, 64)
 	return &t
-}
-
-// OKX requires subscription in JSON format with op: "subscribe"
-// https://www.okx.com/docs-v5/en/?language=shell#order-book-trading-market-data-ws-tickers-channel
-func OKXSubscribe(ws *websocket.Conn) error {
-	m := struct {
-		Op   string        `json:"op"`
-		Args []interface{} `json:"args"`
-	}{}
-	m.Op = "subscribe"
-	args := []interface{}{}
-	for _, pair := range db.TrackedPairs("okx") {
-		args = append(args, map[string]interface{}{
-			"channel":  "tickers",
-			"instId":   pair,
-			"instType": "SPOT",
-		})
-	}
-	m.Args = args
-	return ws.WriteJSON(m)
-}
-
-type OKXParser struct{}
-
-func (p *OKXParser) Response(b []byte) (*OKXResponse, error) {
-	v := OKXResponse{}
-	err := json.Unmarshal(b, &v)
-	return &v, err
-}
-
-func (p *OKXParser) Ticker(b []byte) (*OKXTicker, error) {
-	v := OKXTicker{}
-	err := json.Unmarshal(b, &v)
-	return &v, err
 }

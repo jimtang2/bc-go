@@ -2,12 +2,15 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/IBM/sarama"
 	"github.com/rs/cors"
 	"github.com/spf13/viper"
 )
@@ -20,14 +23,23 @@ func init() {
 	viper.SetDefault("http.port", ":8080")
 	viper.SetDefault("kafka.brokers", []string{"0.0.0.0:29092"})
 	viper.SetDefault("cors.allowed_origins", []string{"http://localhost:5173"})
-
 	if err := viper.ReadInConfig(); err != nil {
 		log.Println("config not found (using defaults)")
 		log.Println(viper.AllSettings())
 	}
 }
 
+var channel = make(chan []byte)
+
 func main() {
+	go startHttp()
+	go consume()
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	<-sig
+}
+
+func startHttp() {
 	http.Handle("/", http.FileServer(http.Dir("dist")))
 	http.Handle("/ws", NewSocketHandler())
 	log.Println("dashboard listening on", viper.GetString("http.port"))
@@ -38,7 +50,50 @@ func main() {
 	}).Handler(http.DefaultServeMux)); err != nil {
 		log.Fatal(err)
 	}
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
+}
+
+func consume() {
+	var (
+		err      error
+		brokers  = viper.GetStringSlice("kafka.brokers")
+		config   = sarama.NewConfig()
+		topicIn  = "alpha"
+		consumer sarama.Consumer
+	)
+	config.Consumer.Offsets.Initial = sarama.OffsetNewest
+	if consumer, err = sarama.NewConsumer(brokers, config); err != nil {
+		log.Fatal(err)
+	}
+	go func() {
+		defer consumer.Close()
+		partitionList, err := consumer.Partitions(topicIn)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, partition := range partitionList {
+			pc, err := consumer.ConsumePartition(topicIn, partition, sarama.OffsetNewest)
+			if err != nil {
+				log.Fatal(err)
+			}
+			go func(pc sarama.PartitionConsumer) {
+				defer pc.Close()
+				for {
+					if m, ok := <-pc.Messages(); ok {
+						channel <- process(m)
+					}
+				}
+			}(pc)
+		}
+		select {}
+	}()
+	select {}
+}
+
+func process(m *sarama.ConsumerMessage) []byte {
+	return bytes.Replace(
+		m.Value,
+		[]byte("{"),
+		[]byte(fmt.Sprintf(`{"id":%v,`, m.Offset)),
+		1,
+	)
 }

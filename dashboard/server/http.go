@@ -11,82 +11,78 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  4096,
-	WriteBufferSize: 4096,
-	CheckOrigin:     func(r *http.Request) bool { return true },
-}
-
 type SocketHandler struct {
-	in       chan interface{}
-	subs     map[*http.Request]chan interface{}
+	upgrader websocket.Upgrader
 	mu       sync.Mutex
-	consumer *Consumer
+	subs     map[*http.Request]chan []byte
 }
 
 func NewSocketHandler() *SocketHandler {
-	h := &SocketHandler{
-		in:       make(chan interface{}),
-		subs:     map[*http.Request]chan interface{}{},
-		mu:       sync.Mutex{},
-		consumer: &Consumer{},
+	socket := &SocketHandler{
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  4096,
+			WriteBufferSize: 4096,
+			CheckOrigin:     func(r *http.Request) bool { return true },
+		},
+		mu:   sync.Mutex{},
+		subs: map[*http.Request]chan []byte{},
 	}
-	go h.proxy()
-	go h.consumer.consume(h.in)
-	return h
+	go socket.proxy()
+	return socket
 }
 
-func (h *SocketHandler) proxy() {
+// proxy global channel messages to all subs
+func (socket *SocketHandler) proxy() {
 	for {
-		m := <-h.in
-		h.mu.Lock()
-		for _, out := range h.subs {
-			out <- m
+		b := <-channel
+		socket.mu.Lock()
+		for _, subChan := range socket.subs {
+			subChan <- b
 		}
-		h.mu.Unlock()
+		socket.mu.Unlock()
 	}
 }
 
-func (h *SocketHandler) sub(r *http.Request) chan interface{} {
-	c := make(chan interface{})
-	h.mu.Lock()
-	h.subs[r] = c
-	h.mu.Unlock()
-	go func(out chan interface{}) {
+func (socket *SocketHandler) subscribe(r *http.Request) chan []byte {
+	socket.mu.Lock()
+	socket.subs[r] = make(chan []byte)
+	socket.mu.Unlock()
+	go func(subChan chan []byte) {
 		ctx := r.Context()
 		select {
 		case <-ctx.Done():
-			h.unsub(r)
-			close(out)
+			socket.unsubscribe(r)
 		}
-	}(c)
-	return c
+	}(socket.subs[r])
+	return socket.subs[r]
 }
 
-func (h *SocketHandler) unsub(r *http.Request) {
-	h.mu.Lock()
-	delete(h.subs, r)
-	h.mu.Unlock()
+func (socket *SocketHandler) unsubscribe(r *http.Request) {
+	socket.mu.Lock()
+	defer socket.mu.Unlock()
+	close(socket.subs[r])
+	delete(socket.subs, r)
 }
 
-func (h *SocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+func (socket *SocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	conn, err := socket.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Upgrade error: %v", err)
 		return
 	}
 	defer conn.Close()
 	_, cancel := context.WithCancel(context.Background())
-	ch := h.sub(r)
-	defer h.unsub(r)
+	// listen to sub chan
 	go func() {
-		for u := range ch {
-			if err := conn.WriteJSON(u); err != nil {
+		subChan := socket.subscribe(r)
+		for b := range subChan {
+			if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
 				log.Printf("Error sending to WebSocket: %v", err)
 				return
 			}
 		}
 	}()
+	// cancel sub when read errors
 	for {
 		_, _, err := conn.ReadMessage()
 		if err != nil {

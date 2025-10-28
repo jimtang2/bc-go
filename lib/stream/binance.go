@@ -11,20 +11,17 @@ import (
 	"github.com/jimtang2/bc-go/lib/db"
 )
 
-type BinanceStream struct{}
+type BinanceStream struct {
+	messages chan Message
+}
 
 func (s *BinanceStream) Start() chan Message {
-	var (
-		mgr     = &BinanceManager{}
-		c       = make(chan Message)
-		pairs   = db.TrackedPairs("binance")
-		ws, err = mgr.subscribe(pairs)
-	)
+	s.messages = make(chan Message)
+	ws, err := s.subscribe()
 	if err != nil {
 		log.Println("[binance]", err)
-		return c
+		return s.messages
 	}
-	log.Println("[binance] subscribed to", strings.Join(pairs, ", "))
 	go func() {
 		defer ws.Close()
 		for {
@@ -42,67 +39,36 @@ func (s *BinanceStream) Start() chan Message {
 				}
 				continue
 			case websocket.TextMessage:
-				pair := mgr.readPair(b)
-				if len(pair) == 0 {
-					log.Println("[binance] could not read pair:", string(b))
-					continue
-				}
-				go func() {
-					c <- Message{
-						Topic: "tickers_raw",
-						Key:   "[binance]" + pair,
-						Headers: map[string]string{
-							"exchange": "binance",
-							"pair":     pair,
-						},
-						Payload: b,
-					}
-				}()
-				go func() {
-					v := &BinanceTicker{}
-					if err := json.Unmarshal(b, v); err != nil {
-						log.Println("[binance]", err)
-						return
-					}
-					t := v.Ticker().Fmt()
-					if !t.IsValid() {
-						return
-					}
-					c <- Message{
-						Topic:   "tickers",
-						Key:     t.Key(),
-						Payload: t.Bytes(),
-					}
-				}()
+				go s.send(b)
 			default:
 			}
 		}
 	}()
-	return c
+	return s.messages
 }
 
-type BinanceManager struct{}
-
-func (b *BinanceManager) subscribe(pairs []string) (*websocket.Conn, error) {
-	ws, _, err := websocket.DefaultDialer.Dial(fmt.Sprintf("wss://stream.binance.com:9443/stream?streams=%s@ticker", strings.Join(pairs, "@ticker/")), nil)
+func (s *BinanceStream) subscribe() (*websocket.Conn, error) {
+	ws, _, err := websocket.DefaultDialer.Dial(fmt.Sprintf("wss://stream.binance.com:9443/stream?streams=%s@ticker", strings.Join(db.TrackedPairs("binance"), "@ticker/")), nil)
 	return ws, err
 }
 
-func (s *BinanceManager) readPair(b []byte) string {
-	v := struct {
-		Data struct {
-			Symbol string `json:"s"`
-		} `json:"data"`
-	}{}
-	err := json.Unmarshal(b, &v)
-	if err != nil {
-		return ""
-	} else {
-		return v.Data.Symbol
+func (s *BinanceStream) send(b []byte, args ...interface{}) {
+	v := &BinanceTicker{}
+	if err := json.Unmarshal(b, v); err != nil {
+		return
+	}
+	t, ok := v.Ticker().Fmt()
+	if !ok {
+		return
+	}
+	s.messages <- Message{
+		Topic:   "tickers",
+		Key:     t.Key(),
+		Payload: t.Bytes(),
 	}
 }
 
-// BinanceQuote defines a detailed quote structure for centralized exchanges, including standard market data (https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#individual-symbol-ticker-streams)
+// BinanceTicker defines a detailed quote structure for centralized exchanges, including standard market data (https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#individual-symbol-ticker-streams)
 /*{
   "e": "24hrTicker",  // Event type
   "E": 1672515782136, // Event time
@@ -158,9 +124,8 @@ type BinanceTicker struct {
 }
 
 func (v *BinanceTicker) Ticker() *Ticker {
-	t := Ticker{
-		Exchange: "binance",
-	}
+	t := Ticker{}
+	t.Exchange = "binance"
 	t.Pair = v.Data.Symbol
 	t.Bid, _ = strconv.ParseFloat(v.Data.BestBidPrice, 64)
 	t.BidSize, _ = strconv.ParseFloat(v.Data.BestBidQuantity, 64)
@@ -168,15 +133,4 @@ func (v *BinanceTicker) Ticker() *Ticker {
 	t.AskSize, _ = strconv.ParseFloat(v.Data.BestAskQuantity, 64)
 	t.EventTime = v.Data.EventTime
 	return &t
-}
-
-type BinanceParser struct{}
-
-func (s *BinanceParser) Ticker(b []byte) (*BinanceTicker, error) {
-	v := BinanceTicker{}
-	if err := json.Unmarshal(b, &v); err != nil {
-		return nil, err
-	} else {
-		return &v, nil
-	}
 }

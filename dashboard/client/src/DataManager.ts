@@ -5,15 +5,29 @@ import type { IMessageEvent, ICloseEvent } from 'websocket';
 import { produce } from "immer";
 
 export interface Ticker {
-  e: string; // exchange
-  s: string; // symbol
-  p: number; // average price
+  x: string; // exchange
+  p: string; // pair
+  b: number; // bid
+  bs: number; // bid size
+  a: number; // ask 
+  as: number; // ask size
+  et: number; // event time
+}
+
+export interface Alpha {
+  id: number;
+  ask: Ticker;
+  bid: Ticker;
+  p: string; // pair
+  s: number; // spread
+  sr: number; // spread ratio
+  ss: number; // spread size
 }
 
 interface DashboardDataState {
-  pairs: Record<string,boolean>;
-  exchanges: Record<string,boolean>;
-  tickers: Record<string,Record<string,Ticker>>;
+  alpha: Alpha[];
+  exchanges: string[];
+  pairs: string[];
   status: 'connected' | 'disconnected' | 'retry';
   reconnect: () => void;
 }
@@ -22,11 +36,6 @@ const API_HOST = process.env.NODE_ENV === 'production' ? document.location.host 
 
 export const useDataStore = create<DashboardDataState>((set, get) => {
   let ws: WebSocket | null = null;
-
-  const fetchLists = async () => {
-    const { exchanges, pairs } = await fetch(`http://${API_HOST}/lists`).then(resp => resp.json());
-    set(state => ({ ...state, pairs, exchanges }));
-  };
 
   const setupWebSocket = () => {
     ws = new WebSocket(`ws://${API_HOST}/ws`);
@@ -39,17 +48,13 @@ export const useDataStore = create<DashboardDataState>((set, get) => {
       try {
         const message = JSON.parse(event.data)
         set(produce((draft: DashboardDataState) => {
-        //   if (isQuoteMsg(data)) {
-        //     const q = data as Quote;
-        //     const k = `${q.p}.${q.x}`
-        //     draft.tickers[k] = q
-        //   } else if (isTradeMsg(data)) {
-        //     draft.trades.unshift(data as Trade)
-        //     if (draft.trades.length > 20) draft.trades.pop()            
-        //   } else if (isMetricMsg(data)) {
-        //     draft.metrics.unshift(data as Metric)
-        //     if (draft.metrics.length > 20) draft.metrics.pop()
-        //   }
+          if (!draft.alpha) {
+            draft.alpha = []
+          }
+          draft.alpha.unshift(message as Alpha);
+          if (draft.alpha.length > 20) {
+            draft.alpha.pop()
+          }
         }));
       } catch (e) {
         console.error('WebSocket message parse error:', e);
@@ -87,9 +92,9 @@ export const useDataStore = create<DashboardDataState>((set, get) => {
   setupWebSocket();
 
   return { 
-    pairs: {},
-    exchanges: {},
-    tickers: {}, 
+    alpha: [],
+    exchanges: [],
+    pairs: [], 
     status: 'disconnected',
     reconnect,
   };

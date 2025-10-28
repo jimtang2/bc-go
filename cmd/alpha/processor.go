@@ -34,7 +34,6 @@ func (p *Processor) Process(m *sarama.ConsumerMessage) {
 		log.Println(err)
 	}
 	pair := t.Pair
-	// lazy create market for pair
 	if _, ok := p.markets[pair]; !ok {
 		p.markets[pair] = &Market{
 			mu:   sync.Mutex{},
@@ -42,12 +41,10 @@ func (p *Processor) Process(m *sarama.ConsumerMessage) {
 		}
 	}
 	market := p.markets[pair]
-	// compare ticker to market lowest ask
 	if market.LowestAsk == nil || t.Ask < market.LowestAsk.Ask {
 		market.SetLowestAsk(&t)
 	}
-	// compare ticker to market highest bid
-	if market.HighestBid == nil || t.Bid < market.HighestBid.Bid {
+	if market.HighestBid == nil || t.Bid > market.HighestBid.Bid {
 		market.SetHighestBid(&t)
 	}
 	if a := market.Seek(); a != nil {
@@ -91,20 +88,26 @@ func (m *Market) Void(t *stream.Ticker, d time.Duration) {
 }
 
 func (m *Market) Seek() *Alpha {
+	m.Lock()
 	if m.LowestAsk == nil || m.HighestBid == nil || m.LowestAsk.Exchange == m.HighestBid.Exchange {
+		m.Unlock()
 		return nil
 	}
-	lo, hi := m.LowestAsk, m.HighestBid
-	spread := hi.Bid - lo.Ask
-	spreadPct := spread / lo.Ask * 100
-	spreadSize := 0.0
+	var (
+		lo         = *m.LowestAsk
+		hi         = *m.HighestBid
+		spread     = hi.Bid - lo.Ask
+		spreadPct  = spread / lo.Ask * 100
+		spreadSize = 0.0
+		spreadVal  = spreadSize * spread
+	)
+	m.Unlock()
 	if hi.BidSize < lo.AskSize {
 		spreadSize = hi.BidSize
 	} else {
 		spreadSize = lo.AskSize
 	}
-	spreadVal := spreadSize * spread
-	if spread <= 0 {
+	if spreadPct <= 0.01 {
 		return nil
 	}
 	log.Printf("%10s  %v-%v  +%.2f%%  +%.2f$  %.2f  %.2f  [%.2f  %.2f  %.2f  %.2f]",
@@ -121,8 +124,8 @@ func (m *Market) Seek() *Alpha {
 		lo.AskSize,
 	)
 	return &Alpha{
-		Ask:         *m.LowestAsk,
-		Bid:         *m.HighestBid,
+		Ask:         lo,
+		Bid:         hi,
 		Pair:        m.Pair,
 		Spread:      spread,
 		SpreadRatio: spread / lo.Ask,

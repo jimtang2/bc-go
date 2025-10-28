@@ -11,33 +11,81 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef, type CellContext } from '@tanstack/react-table';
-import { useDataStore, type Quote } from '../DataManager';
+import { useDataStore, type Alpha, type Ticker } from '../DataManager';
+import { exchangesMap, calcProfit } from "@/lib/utils";
+import clsx from "clsx";
 
 const PairsTable: React.FC = () => {
-  const { pairs: data, exchanges } = useDataStore();
-  const columns: ColumnDef<string, any>[] = useMemo(() => ([
+  const { alpha: data } = useDataStore();
+  const columns: ColumnDef<string, any>[] = [
     { 
-      accessorKey: 'p', 
+      accessorKey: 'pair', 
       header: 'Pair', 
-      size: 15, 
-      accessorFn: (row: string) => row, 
-      cell: (info: CellContext<any, string>) => <span className="font-bold">{info.getValue().toUpperCase()}</span> 
+      size: 5, 
+      cell: (info: CellContext<any, string>) => 
+        <span className="font-bold">
+          {info.getValue()}
+        </span> 
     },
-    ...exchanges.map(x => ({
-      accessorFn: (row: string) => row + "." + x,
-      header: x.charAt(0).toUpperCase() + x.slice(1),
-      size: (85 / (exchanges.length + 1)),
-      cell: (info: CellContext<any, string>) => info ? <QuoteCell info={info} /> : null,
-    }))
-  ]), [exchanges]);
+    { 
+      header: 'Exchanges', 
+      size: 5, 
+      accessorFn: ({ bid, ask }) => `${exchangesMap[bid.x]}–${exchangesMap[ask.x]}`,
+      cell: (info: CellContext<any, string>) => 
+        <span className="">
+          {info.getValue()}
+        </span> 
+    },
+    { 
+      accessorKey: 'spread_size', 
+      header: 'Volume', 
+      size: 5, 
+      meta: { className: 'text-right font-mono' },
+      cell: (info: CellContext<any, string>) => 
+        <span className="">
+          {info.getValue().toFixed(2)}
+        </span> 
+    },
+    { 
+      header: 'Spread (pre-fee)', 
+      size: 5, 
+      accessorFn: ({ spread, spread_size }) => spread * spread_size, 
+      meta: { className: 'text-right font-mono' },
+      cell: (info: CellContext<any, string>) => 
+        <span className="">
+          {info.getValue().toFixed(2)}$
+        </span> 
+    },
+    { 
+      header: 'Profit (post-fee)',
+      size: 5, 
+      accessorFn: ({ bid, ask, spread_size: size }) => calcProfit(bid, ask, size),
+      meta: { className: 'text-right font-mono' },
+      cell: (info: CellContext<any, string>) => 
+        <span className="">
+          {info.getValue().toFixed(2)}$
+        </span> 
+    },
+    { 
+      accessorKey: 'spread_ratio', 
+      header: '% Margin', 
+      size: 5, 
+      meta: { align: 'right' },
+      cell: (info: CellContext<any, string>) => 
+        <span className="">
+          {(info.getValue()*100).toFixed(2)}%
+        </span> 
+    },
+  ];
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getRowId: (row: Alpha) => row.id.toString(),
   });
 
   return (
-    <div className="mx-4 lg:mx-6 overflow-hidden rounded-lg border">
+    <div className="mx-2 lg:mx-3 overflow-hidden rounded-lg border">
       <Table>
         <TableHeader className="bg-muted">
           {table.getHeaderGroups().map((headerGroup) => (
@@ -52,15 +100,17 @@ const PairsTable: React.FC = () => {
         </TableHeader>
         <TableBody>
           {table.getRowModel().rows.length ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow key={row.original}>
+            table.getRowModel().rows.map((row) => {
+              const { bid, ask, spread_size: size } = row.original
+              const muted = calcProfit(bid, ask, size) < 0
+              return <TableRow key={row.id} className={clsx(muted && "text-muted-foreground")}>
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id} style={{ width: `${cell.column.columnDef.size}%` }}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
               </TableRow>
-            ))
+            })
           ) : (
             <TableRow>
               <TableCell colSpan={columns.length} className="h-24 text-center">
@@ -71,16 +121,6 @@ const PairsTable: React.FC = () => {
         </TableBody>
       </Table>
     </div>
-  );
-};
-
-const QuoteCell = ({ info }: { info: CellContext<any, any> }) => {
-  const k = info.getValue()
-  const q: Quote = useDataStore(({ quotes }) => quotes[k])
-  const text = q?.p | -1
-
-  return (
-    <span>{text}</span>
   );
 };
 

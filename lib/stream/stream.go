@@ -27,17 +27,17 @@ type Ticker struct {
 	EventTime int64   `json:"et"` // unix time ms
 }
 
-func (t *Ticker) Fmt() *Ticker {
+func (t *Ticker) Fmt() (*Ticker, bool) {
 	t.Pair = strings.ReplaceAll(t.Pair, "/", "")
 	t.Pair = strings.ReplaceAll(t.Pair, "-", "")
 	t.Pair = strings.ReplaceAll(t.Pair, ":", "")
 	if i := strings.Index(t.Pair, "USD"); i > -1 {
 		t.Pair = t.Pair[:i] + ":" + t.Pair[i:]
 	}
-	return t
+	return t, t.Valid()
 }
 
-func (t *Ticker) IsValid() bool {
+func (t *Ticker) Valid() bool {
 	return len(t.Pair) > 0 && len(t.Exchange) > 0 && t.Bid > 0 && t.Ask > 0
 }
 

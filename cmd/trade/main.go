@@ -17,16 +17,12 @@ func init() {
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("/config")
 	viper.SetDefault("kafka.brokers", []string{"0.0.0.0:29092"})
-	viper.SetDefault("db.url", "postgres://postgres:password@localhost/bc?sslmode=disable")
 	if err := viper.ReadInConfig(); err != nil {
 		log.Println("config not found (using defaults)")
 		log.Println(viper.AllSettings())
 	}
 }
 
-// orchestration of main app objects
-// set up kafka client aka Producer
-// the producer simply listens to quote messages on a channel that is passed to all the quote fetchers and pushes the messages on the quotes topic
 func main() {
 	log.Println("trade on")
 	sig := make(chan os.Signal, 1)

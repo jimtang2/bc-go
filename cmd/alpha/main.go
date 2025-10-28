@@ -55,6 +55,7 @@ func main() {
 				log.Fatal(err)
 			}
 			go func(pc sarama.PartitionConsumer) {
+				defer pc.Close()
 				for {
 					s := <-pc.Messages()
 					processor.Process(s)
@@ -67,15 +68,14 @@ func main() {
 	go func() {
 		for {
 			output := <-processor.out
-			message := &sarama.ProducerMessage{
-				Topic: topicOut,
-				Key:   sarama.StringEncoder(output.Key()),
-				Value: sarama.ByteEncoder(output.Bytes()),
-			}
-			if true {
-				if _, _, err := producer.SendMessage(message); err != nil {
-					log.Println(err)
-				}
+			if _, _, err := producer.SendMessage(
+				&sarama.ProducerMessage{
+					Topic: topicOut,
+					Key:   sarama.StringEncoder(output.Key()),
+					Value: sarama.ByteEncoder(output.Bytes()),
+				},
+			); err != nil {
+				log.Println(err)
 			}
 		}
 	}()

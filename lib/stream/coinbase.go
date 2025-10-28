@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -12,78 +11,73 @@ import (
 )
 
 type CoinbaseStream struct {
-	parser *CoinbaseParser
+	messages chan Message
 }
 
 func (s *CoinbaseStream) Start() chan Message {
-	s.parser = &CoinbaseParser{}
-	c := make(chan Message)
-	pairs := db.TrackedPairs("coinbase")
-	url := "wss://ws-feed.exchange.coinbase.com"
-	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
+	s.messages = make(chan Message)
+	ws, err := s.subscribe()
 	if err != nil {
 		log.Println("[coinbase]", err)
-		return c
+		return s.messages
 	}
-	subscribeMsg := map[string]interface{}{
-		"type":        "subscribe",
-		"product_ids": pairs,
-		"channels":    []string{"ticker"},
-	}
-	if err := ws.WriteJSON(subscribeMsg); err != nil {
-		log.Println(err)
-		close(c)
-		return c
-	}
-	log.Println("[coinbase] subscribed to", strings.Join(pairs, ", "))
 	go func() {
 		defer ws.Close()
 		for {
 			messageType, b, err := ws.ReadMessage()
 			if err != nil {
-				log.Println(err)
+				log.Println("[coinbase]", err)
 				return
 			}
 			switch messageType {
-			case websocket.PingMessage:
 			case websocket.TextMessage:
-				pair, err := s.parser.Pair(b)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				go func() {
-					c <- Message{
-						Topic: "tickers_raw",
-						Key:   "[coinbase]" + pair,
-						Headers: map[string]string{
-							"exchange": "coinbase",
-							"pair":     pair,
-						},
-						Payload: b,
-					}
-				}()
-				go func() {
-					v, err := (&CoinbaseParser{}).Ticker(b)
-					if err != nil {
-						log.Println(err)
-						return
-					}
-					t := v.Ticker().Fmt()
-					if !t.IsValid() {
-						return
-					}
-					c <- Message{
-						Topic:   "tickers",
-						Key:     t.Key(),
-						Payload: t.Bytes(),
-					}
-				}()
+				go s.send(b)
 			default:
 			}
 		}
 	}()
-	return c
+	return s.messages
+}
+
+func (s *CoinbaseStream) subscribe() (*websocket.Conn, error) {
+	ws, _, err := websocket.DefaultDialer.Dial("wss://ws-feed.exchange.coinbase.com", nil)
+	if err != nil {
+		return nil, err
+	}
+	subscribeMsg := map[string]interface{}{
+		"type":        "subscribe",
+		"product_ids": db.TrackedPairs("coinbase"),
+		"channels":    []string{"ticker"},
+	}
+	if err := ws.WriteJSON(subscribeMsg); err != nil {
+		return nil, err
+	}
+	return ws, nil
+}
+
+func (s *CoinbaseStream) send(b []byte, args ...interface{}) {
+	v := CoinbaseTicker{}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return
+	}
+	t, ok := v.Ticker().Fmt()
+	if !ok {
+		return
+	}
+	s.messages <- Message{
+		Topic:   "tickers",
+		Key:     t.Key(),
+		Payload: t.Bytes(),
+	}
+}
+
+// https://docs.cdp.coinbase.com/exchange/websocket-feed/channels#ticker-channel
+func (p *CoinbaseStream) pair(b []byte) (string, bool) {
+	v := struct {
+		ProductID string `json:"product_id"`
+	}{}
+	err := json.Unmarshal(b, &v)
+	return v.ProductID, err == nil
 }
 
 /*
@@ -141,21 +135,4 @@ func (v *CoinbaseTicker) Ticker() *Ticker {
 		t.EventTime = ts.UnixMilli()
 	}
 	return &t
-}
-
-type CoinbaseParser struct{}
-
-// https://docs.cdp.coinbase.com/exchange/websocket-feed/channels#ticker-channel
-func (p *CoinbaseParser) Pair(b []byte) (string, error) {
-	v := struct {
-		ProductID string `json:"product_id"`
-	}{}
-	err := json.Unmarshal(b, &v)
-	return v.ProductID, err
-}
-
-func (p *CoinbaseParser) Ticker(b []byte) (*CoinbaseTicker, error) {
-	t := CoinbaseTicker{}
-	err := json.Unmarshal(b, &t)
-	return &t, err
 }
