@@ -12,44 +12,75 @@ import (
 )
 
 type BinanceStream struct {
-	messages chan Message
+	out    chan Message
+	signal chan int
+	socket *websocket.Conn
 }
 
-func (s *BinanceStream) Start() chan Message {
-	s.messages = make(chan Message)
-	ws, err := s.subscribe()
-	if err != nil {
-		log.Println("[binance]", err)
-		return s.messages
+func NewBinanceStream() *BinanceStream {
+	return &BinanceStream{
+		out:    make(chan Message),
+		signal: make(chan int),
 	}
-	go func() {
-		defer ws.Close()
-		for {
-			messageType, b, err := ws.ReadMessage()
+}
+
+func (s *BinanceStream) Output() chan Message {
+	return s.out
+}
+
+func (s *BinanceStream) Start() {
+	go start(s)
+	s.signal <- 1
+}
+
+func (s *BinanceStream) Name() string {
+	return "binance"
+}
+
+func (s *BinanceStream) Signal() chan int {
+	return s.signal
+}
+
+func (s *BinanceStream) Connect() error {
+	return s.connect()
+}
+
+func (s *BinanceStream) Listen() {
+	s.listen()
+}
+
+func (s *BinanceStream) Close() {
+	if s.socket != nil {
+		s.socket.Close()
+	}
+}
+
+func (s *BinanceStream) connect() error {
+	var err error
+	s.socket, _, err = websocket.DefaultDialer.Dial(fmt.Sprintf("wss://stream.binance.com:9443/stream?streams=%s@ticker", strings.Join(db.TrackedPairs("binance"), "@ticker/")), nil)
+	return err
+}
+
+func (s *BinanceStream) listen() {
+	for {
+		messageType, b, err := s.socket.ReadMessage()
+		if err != nil {
+			log.Println("[binance]", err)
+			break
+		}
+		switch messageType {
+		case websocket.PingMessage:
+			err = s.socket.WriteMessage(websocket.PongMessage, b)
 			if err != nil {
 				log.Println("[binance]", err)
-				return
+				break
 			}
-			switch messageType {
-			case websocket.PingMessage:
-				err = ws.WriteMessage(websocket.PongMessage, b)
-				if err != nil {
-					log.Println("[binance]", err)
-					return
-				}
-				continue
-			case websocket.TextMessage:
-				go s.send(b)
-			default:
-			}
+		case websocket.TextMessage:
+			go s.send(b)
+		default:
 		}
-	}()
-	return s.messages
-}
-
-func (s *BinanceStream) subscribe() (*websocket.Conn, error) {
-	ws, _, err := websocket.DefaultDialer.Dial(fmt.Sprintf("wss://stream.binance.com:9443/stream?streams=%s@ticker", strings.Join(db.TrackedPairs("binance"), "@ticker/")), nil)
-	return ws, err
+	}
+	s.signal <- 2
 }
 
 func (s *BinanceStream) send(b []byte, args ...interface{}) {
@@ -61,39 +92,13 @@ func (s *BinanceStream) send(b []byte, args ...interface{}) {
 	if !ok {
 		return
 	}
-	s.messages <- Message{
+	s.out <- Message{
 		Topic:   "tickers",
 		Key:     t.Key(),
 		Payload: t.Bytes(),
 	}
 }
 
-// BinanceTicker defines a detailed quote structure for centralized exchanges, including standard market data (https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#individual-symbol-ticker-streams)
-/*{
-  "e": "24hrTicker",  // Event type
-  "E": 1672515782136, // Event time
-  "s": "BNBBTC",      // Symbol
-  "p": "0.0015",      // Price change
-  "P": "250.00",      // Price change percent
-  "w": "0.0018",      // Weighted average price
-  "x": "0.0009",      // First trade(F)-1 price (first trade before the 24hr rolling window)
-  "c": "0.0025",      // Last price
-  "Q": "10",          // Last quantity
-  "b": "0.0024",      // Best bid price
-  "B": "10",          // Best bid quantity
-  "a": "0.0026",      // Best ask price
-  "A": "100",         // Best ask quantity
-  "o": "0.0010",      // Open price
-  "h": "0.0025",      // High price
-  "l": "0.0010",      // Low price
-  "v": "10000",       // Total traded base asset volume
-  "q": "18",          // Total traded quote asset volume
-  "O": 0,             // Statistics open time
-  "C": 86400000,      // Statistics close time
-  "F": 0,             // First trade ID
-  "L": 18150,         // Last trade Id
-  "n": 18151          // Total number of trades
-}*/
 type BinanceTicker struct {
 	Stream string `json:"stream"`
 	Data   struct {
@@ -134,3 +139,30 @@ func (v *BinanceTicker) Ticker() *Ticker {
 	t.EventTime = v.Data.EventTime
 	return &t
 }
+
+// BinanceTicker defines a detailed quote structure for centralized exchanges, including standard market data (https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#individual-symbol-ticker-streams)
+/*{
+  "e": "24hrTicker",  // Event type
+  "E": 1672515782136, // Event time
+  "s": "BNBBTC",      // Symbol
+  "p": "0.0015",      // Price change
+  "P": "250.00",      // Price change percent
+  "w": "0.0018",      // Weighted average price
+  "x": "0.0009",      // First trade(F)-1 price (first trade before the 24hr rolling window)
+  "c": "0.0025",      // Last price
+  "Q": "10",          // Last quantity
+  "b": "0.0024",      // Best bid price
+  "B": "10",          // Best bid quantity
+  "a": "0.0026",      // Best ask price
+  "A": "100",         // Best ask quantity
+  "o": "0.0010",      // Open price
+  "h": "0.0025",      // High price
+  "l": "0.0010",      // Low price
+  "v": "10000",       // Total traded base asset volume
+  "q": "18",          // Total traded quote asset volume
+  "O": 0,             // Statistics open time
+  "C": 86400000,      // Statistics close time
+  "F": 0,             // First trade ID
+  "L": 18150,         // Last trade Id
+  "n": 18151          // Total number of trades
+}*/

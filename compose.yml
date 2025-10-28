@@ -56,20 +56,29 @@ services:
       - "5432:5432"
     restart: unless-stopped
 
-  # stream:
-  #   build:
-  #     context: .
-  #     dockerfile: deploy/docker/stream.dockerfile
-  #   container_name: bc_stream
-  #   depends_on:
-  #     kafka:
-  #       condition: service_healthy
-  #   environment:
-  #     MIN_PROFIT_MARGIN: "0.5"
-  #     POLL_INTERVAL_MS: "1000"
-  #   volumes:
-  #     - config:/config:ro
-  #   restart: unless-stopped
+  stream:
+    build:
+      context: .
+      dockerfile: deploy/docker/stream.dockerfile
+    container_name: bc_stream
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - config:/config:ro
+    restart: unless-stopped
+
+  alpha:
+    build:
+      context: .
+      dockerfile: deploy/docker/alpha.dockerfile
+    container_name: bc_alpha
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - config:/config:ro
+    restart: unless-stopped
 
   # trade:
   #   build:

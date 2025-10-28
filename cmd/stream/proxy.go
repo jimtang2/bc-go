@@ -24,11 +24,11 @@ func NewProxy() (*Proxy, error) {
 		p       = Proxy{
 			channel: make(chan stream.Message),
 			streams: []stream.Stream{
-				&stream.BinanceStream{},
-				&stream.OKXStream{},
-				&stream.BitfinexStream{},
-				&stream.CoinbaseStream{},
-				&stream.KrakenStream{},
+				stream.NewBinanceStream(),
+				stream.NewOKXStream(),
+				stream.NewBitfinexStream(),
+				stream.NewCoinbaseStream(),
+				stream.NewKrakenStream(),
 				// &stream.Gemini{},
 				// &stream.Uniswap{},
 			},
@@ -67,9 +67,9 @@ func (p *Proxy) Produce() {
 func (p *Proxy) Stream() {
 	for _, s := range p.streams {
 		go func(s stream.Stream) {
-			ch := s.Start()
+			go s.Start()
 			for {
-				p.channel <- <-ch
+				p.channel <- <-s.Output()
 			}
 		}(s)
 	}

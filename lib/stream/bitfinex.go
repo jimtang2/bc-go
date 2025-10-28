@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/jimtang2/bc-go/lib/db"
@@ -12,57 +13,85 @@ import (
 type BitfinexStream struct {
 	channels map[int]string // map of channel id to pair text
 	mu       sync.Mutex
-	messages chan Message
+	out      chan Message
+	signal   chan int
+	socket   *websocket.Conn
 }
 
-// https://docs.bitfinex.com/docs/ws-general#subscribe-to-channels
-func (s *BitfinexStream) Start() chan Message {
-	s.channels = map[int]string{}
-	s.mu = sync.Mutex{}
-	s.messages = make(chan Message)
-	ws, err := s.subscribe()
-	if err != nil {
-		log.Println("[bitfinex]", err)
-		return s.messages
+func NewBitfinexStream() *BitfinexStream {
+	return &BitfinexStream{
+		channels: map[int]string{},
+		mu:       sync.Mutex{},
+		out:      make(chan Message),
+		signal:   make(chan int),
 	}
-	go func() {
-		defer ws.Close()
-		for {
-			messageType, b, err := ws.ReadMessage()
-			if err != nil {
-				log.Println("[bitfinex]", err)
-				return
-			}
-			switch messageType {
-			case websocket.TextMessage:
-				go s.send(b)
-			default:
-			}
-		}
-	}()
-	return s.messages
 }
 
-// https://docs.bitfinex.com/docs/ws-public
-// https://docs.bitfinex.com/reference/ws-public-ticker
-// bitfinex websocket sends as response arrays of items that either number, string or array of number; e.g.: [1234,"hb"] or [1234,[1,2,3,4,5,6,7,8,9,10]]
-// this function returns the channel id integer, a boolean indicating whether message is heartbeat, and error
-func (s *BitfinexStream) subscribe() (*websocket.Conn, error) {
-	ws, _, err := websocket.DefaultDialer.Dial("wss://api-pub.bitfinex.com/ws/2", nil)
-	if err != nil {
-		return nil, err
+func (s *BitfinexStream) Output() chan Message {
+	return s.out
+}
+
+func (s *BitfinexStream) Start() {
+	go start(s)
+	s.signal <- 1
+}
+
+func (s *BitfinexStream) Name() string {
+	return "bitfinex"
+}
+
+func (s *BitfinexStream) Signal() chan int {
+	return s.signal
+}
+
+func (s *BitfinexStream) Connect() error {
+	return s.connect()
+}
+
+func (s *BitfinexStream) Listen() {
+	s.listen()
+}
+
+func (s *BitfinexStream) Close() {
+	if s.socket != nil {
+		s.socket.Close()
 	}
-	subscribeMsg := map[string]interface{}{
+}
+
+func (s *BitfinexStream) connect() error {
+	var err error
+	s.socket, _, err = websocket.DefaultDialer.Dial("wss://api-pub.bitfinex.com/ws/2", nil)
+	if err != nil {
+		return err
+	}
+	m := map[string]interface{}{
 		"event":   "subscribe",
 		"channel": "ticker",
 	}
 	for _, pair := range db.TrackedPairs("bitfinex") {
-		subscribeMsg["symbol"] = "t" + pair
-		if err := ws.WriteJSON(subscribeMsg); err != nil {
+		m["symbol"] = "t" + pair
+		if err := s.socket.WriteJSON(m); err != nil {
 			log.Println("[bitfinex]", err)
 		}
 	}
-	return ws, nil
+	return nil
+}
+
+func (s *BitfinexStream) listen() {
+	for {
+		messageType, b, err := s.socket.ReadMessage()
+		if err != nil {
+			log.Println("[bitfinex]", err)
+			break
+		}
+		switch messageType {
+		case websocket.TextMessage:
+			go s.send(b)
+		default:
+		}
+	}
+	time.Sleep(2 * time.Second)
+	s.signal <- 2
 }
 
 func (s *BitfinexStream) send(b []byte, args ...interface{}) {
@@ -124,7 +153,7 @@ func (s *BitfinexStream) send(b []byte, args ...interface{}) {
 		if t, ok = t.Fmt(); !ok {
 			return
 		}
-		s.messages <- Message{
+		s.out <- Message{
 			Topic:   "tickers",
 			Key:     t.Key(),
 			Payload: t.Bytes(),
@@ -136,19 +165,6 @@ func (s *BitfinexStream) send(b []byte, args ...interface{}) {
 	}
 }
 
-/*
-Index 	Field 	Type 	Description
-[0]	BID	Float	Price of last highest bid
-[1]	BID_SIZE	Float	Sum of the 25 highest bid sizes
-[2]	ASK	Float	Price of last lowest ask
-[3]	ASK_SIZE	Float	Sum of the 25 lowest ask sizes
-[4]	DAILY_CHANGE	Float	Amount that the last price has changed since yesterday
-[5]	DAILY_CHANGE_RELATIVE	Float	Relative price change since yesterday (*100 for percentage change)
-[6]	LAST_PRICE	Float	Price of the last trade.
-[7]	VOLUME	Float	Daily volume
-[8]	HIGH	Float	Daily high
-[9]	LOW	Float	Daily low
-*/
 type BitfinexTicker struct {
 	ChanID              int
 	Bid                 float64
@@ -173,3 +189,22 @@ func (v *BitfinexTicker) Ticker() *Ticker {
 	t.AskSize = v.AskSize
 	return &t
 }
+
+// https://docs.bitfinex.com/docs/ws-public
+// https://docs.bitfinex.com/reference/ws-public-ticker
+// https://docs.bitfinex.com/docs/ws-general#subscribe-to-channels
+// bitfinex websocket sends as response arrays of items that either number, string or array of number; e.g.: [1234,"hb"] or [1234,[1,2,3,4,5,6,7,8,9,10]]
+// this function returns the channel id integer, a boolean indicating whether message is heartbeat, and error
+/*
+Index 	Field 	Type 	Description
+[0]	BID	Float	Price of last highest bid
+[1]	BID_SIZE	Float	Sum of the 25 highest bid sizes
+[2]	ASK	Float	Price of last lowest ask
+[3]	ASK_SIZE	Float	Sum of the 25 lowest ask sizes
+[4]	DAILY_CHANGE	Float	Amount that the last price has changed since yesterday
+[5]	DAILY_CHANGE_RELATIVE	Float	Relative price change since yesterday (*100 for percentage change)
+[6]	LAST_PRICE	Float	Price of the last trade.
+[7]	VOLUME	Float	Daily volume
+[8]	HIGH	Float	Daily high
+[9]	LOW	Float	Daily low
+*/

@@ -2,7 +2,9 @@ package stream
 
 import (
 	"encoding/json"
+	"log"
 	"strings"
+	"time"
 )
 
 type Message struct {
@@ -12,8 +14,46 @@ type Message struct {
 	Payload []byte
 }
 
+const (
+	SIGNAL_EXIT = iota
+	SIGNAL_START
+	SIGNAL_RESTART
+)
+
 type Stream interface {
-	Start() chan Message
+	Start()               // called by Proxy.Stream()
+	Output() chan Message // called by Proxy.Stream()
+	Name() string         // called by stream.Start()
+	Signal() chan int     // called by stream.Start()
+	Connect() error       // called by stream.Start()
+	Listen()              // called by stream.Start()
+	Close()               // called by stream.Start()
+}
+
+func start(s Stream) {
+	for {
+		switch <-s.Signal() {
+		case SIGNAL_EXIT:
+			s.Close()
+			log.Printf("[%v] connection closed (0)", s.Name())
+			return
+		case SIGNAL_START:
+			if err := s.Connect(); err != nil {
+				log.Printf("[%v] %v", s.Name(), err)
+				return
+			}
+			go s.Listen()
+		case SIGNAL_RESTART:
+			s.Close()
+			time.Sleep(2 * time.Second)
+			if err := s.Connect(); err != nil {
+				log.Printf("[%v] %v", s.Name(), err)
+				return
+			}
+			go s.Listen()
+		default:
+		}
+	}
 }
 
 // ticker is the normalized struct for use in topic 'tickers'

@@ -28,7 +28,7 @@ const RefreshButton = ({ status, onClick }: { status: 'connected' | 'disconnecte
 };
 
 export function SiteHeader() {
-  const { connectionStatus, reconnect } = useDataStore();
+  const { status, reconnect } = useDataStore();
 
   return (
     <header className="flex h-[var(--header-height)] shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-[var(--header-height)]">
@@ -36,8 +36,8 @@ export function SiteHeader() {
         <SidebarTrigger className="-ml-1 cursor-pointer" />
         <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
         <h1 className="text-base font-medium flex-grow-1">Dashboard</h1>
-        {(connectionStatus === 'disconnected' || connectionStatus === 'retry') && (
-          <RefreshButton status={connectionStatus} onClick={connectionStatus === 'disconnected' ? reconnect : undefined} />
+        {(status === 'disconnected' || status === 'retry') && (
+          <RefreshButton status={status} onClick={status === 'disconnected' ? reconnect : undefined} />
         )}
       </div>
     </header>

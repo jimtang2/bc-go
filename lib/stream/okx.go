@@ -10,36 +10,54 @@ import (
 )
 
 type OKXStream struct {
-	messages chan Message
+	out    chan Message
+	signal chan int
+	socket *websocket.Conn
 }
 
-func (s *OKXStream) Start() chan Message {
-	s.messages = make(chan Message)
-	ws, err := s.subscribe()
-	if err != nil {
-		log.Println("[okx]", err)
-		return s.messages
+func NewOKXStream() *OKXStream {
+	return &OKXStream{
+		out:    make(chan Message),
+		signal: make(chan int),
 	}
-	go func() {
-		defer ws.Close()
-		for {
-			_, b, err := ws.ReadMessage()
-			if err != nil {
-				log.Println("[okx]", err)
-				return
-			}
-			go s.send(b)
-		}
-	}()
-	return s.messages
 }
 
-// OKX requires subscription in JSON format with op: "subscribe"
-// https://www.okx.com/docs-v5/en/?language=shell#order-book-trading-market-data-ws-tickers-channel
-func (s *OKXStream) subscribe() (*websocket.Conn, error) {
-	ws, _, err := websocket.DefaultDialer.Dial("wss://ws.okx.com:8443/ws/v5/public", nil)
+func (s *OKXStream) Output() chan Message {
+	return s.out
+}
+
+func (s *OKXStream) Start() {
+	go start(s)
+	s.signal <- 1
+}
+
+func (s *OKXStream) Name() string {
+	return "okx"
+}
+
+func (s *OKXStream) Signal() chan int {
+	return s.signal
+}
+
+func (s *OKXStream) Connect() error {
+	return s.connect()
+}
+
+func (s *OKXStream) Listen() {
+	s.listen()
+}
+
+func (s *OKXStream) Close() {
+	if s.socket != nil {
+		s.socket.Close()
+	}
+}
+
+func (s *OKXStream) connect() error {
+	var err error
+	s.socket, _, err = websocket.DefaultDialer.Dial("wss://ws.okx.com:8443/ws/v5/public", nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	m := struct {
 		Op   string        `json:"op"`
@@ -55,7 +73,19 @@ func (s *OKXStream) subscribe() (*websocket.Conn, error) {
 		})
 	}
 	m.Args = args
-	return ws, ws.WriteJSON(m)
+	return s.socket.WriteJSON(m)
+}
+
+func (s *OKXStream) listen() {
+	for {
+		_, b, err := s.socket.ReadMessage()
+		if err != nil {
+			log.Println("[okx]", err)
+			return
+		}
+		go s.send(b)
+	}
+	s.signal <- 2
 }
 
 func (s *OKXStream) send(b []byte, args ...interface{}) {
@@ -71,7 +101,7 @@ func (s *OKXStream) send(b []byte, args ...interface{}) {
 		if !ok {
 			return
 		}
-		s.messages <- Message{
+		s.out <- Message{
 			Topic:   "tickers",
 			Key:     t.Key(),
 			Payload: t.Bytes(),
@@ -79,60 +109,6 @@ func (s *OKXStream) send(b []byte, args ...interface{}) {
 	}
 }
 
-/*
-payload description:
-arg 	Object 	Successfully subscribed channel
-> channel 	String 	Channel name
-> instId 	String 	Instrument ID
-data 	Array of objects 	Subscribed data
-> instType 	String 	Instrument type
-> instId 	String 	Instrument ID
-> last 	String 	Last traded price
-> lastSz 	String 	Last traded size. 0 represents there is no trading volume
-> askPx 	String 	Best ask price
-> askSz 	String 	Best ask size
-> bidPx 	String 	Best bid price
-> bidSz 	String 	Best bid size
-> open24h 	String 	Open price in the past 24 hours
-> high24h 	String 	Highest price in the past 24 hours
-> low24h 	String 	Lowest price in the past 24 hours
-> volCcy24h 	String 	24h trading volume, with a unit of currency.
-If it is a derivatives contract, the value is the number of base currency.
-If it is SPOT/MARGIN, the value is the quantity in quote currency.
-> vol24h 	String 	24h trading volume, with a unit of contract.
-If it is a derivatives contract, the value is the number of contracts.
-If it is SPOT/MARGIN, the value is the quantity in base currency.
-> sodUtc0 	String 	Open price in the UTC 0
-> sodUtc8 	String 	Open price in the UTC 8
-> ts 	String 	Ticker data generation time, Unix timestamp format in milliseconds, e.g. 1597026383085
-*/
-
-/*
-		{
-	  "arg": {
-	    "channel": "tickers",
-	    "instId": "BTC-USDT"
-	  },
-	  "data": [{
-	    "instType": "SPOT",
-	    "instId": "BTC-USDT",
-	    "last": "9999.99",
-	    "lastSz": "0.1",
-	    "askPx": "9999.99",
-	    "askSz": "11",
-	    "bidPx": "8888.88",
-	    "bidSz": "5",
-	    "open24h": "9000",
-	    "high24h": "10000",
-	    "low24h": "8888.88",
-	    "volCcy24h": "2222",
-	    "vol24h": "2222",
-	    "sodUtc0": "2222",
-	    "sodUtc8": "2222",
-	    "ts": "1597026383085"
-	  }]
-	}
-*/
 type OKXTicker struct {
 	Event  string `json:"event"`  // from event response, missing in ticker; values are subscribe, unsubscribe, error
 	Code   string `json:"code"`   // from event response, missing in ticker
@@ -174,3 +150,57 @@ func (v *OKXTicker) Ticker() *Ticker {
 	t.EventTime, _ = strconv.ParseInt(v.Data[0].Ts, 10, 64)
 	return &t
 }
+
+// OKX requires subscription in JSON format with op: "subscribe"
+// https://www.okx.com/docs-v5/en/?language=shell#order-book-trading-market-data-ws-tickers-channel
+/*
+payload description:
+arg 	Object 	Successfully subscribed channel
+> channel 	String 	Channel name
+> instId 	String 	Instrument ID
+data 	Array of objects 	Subscribed data
+> instType 	String 	Instrument type
+> instId 	String 	Instrument ID
+> last 	String 	Last traded price
+> lastSz 	String 	Last traded size. 0 represents there is no trading volume
+> askPx 	String 	Best ask price
+> askSz 	String 	Best ask size
+> bidPx 	String 	Best bid price
+> bidSz 	String 	Best bid size
+> open24h 	String 	Open price in the past 24 hours
+> high24h 	String 	Highest price in the past 24 hours
+> low24h 	String 	Lowest price in the past 24 hours
+> volCcy24h 	String 	24h trading volume, with a unit of currency.
+If it is a derivatives contract, the value is the number of base currency.
+If it is SPOT/MARGIN, the value is the quantity in quote currency.
+> vol24h 	String 	24h trading volume, with a unit of contract.
+If it is a derivatives contract, the value is the number of contracts.
+If it is SPOT/MARGIN, the value is the quantity in base currency.
+> sodUtc0 	String 	Open price in the UTC 0
+> sodUtc8 	String 	Open price in the UTC 8
+> ts 	String 	Ticker data generation time, Unix timestamp format in milliseconds, e.g. 1597026383085
+*/
+/*{
+  "arg": {
+    "channel": "tickers",
+    "instId": "BTC-USDT"
+  },
+  "data": [{
+    "instType": "SPOT",
+    "instId": "BTC-USDT",
+    "last": "9999.99",
+    "lastSz": "0.1",
+    "askPx": "9999.99",
+    "askSz": "11",
+    "bidPx": "8888.88",
+    "bidSz": "5",
+    "open24h": "9000",
+    "high24h": "10000",
+    "low24h": "8888.88",
+    "volCcy24h": "2222",
+    "vol24h": "2222",
+    "sodUtc0": "2222",
+    "sodUtc8": "2222",
+    "ts": "1597026383085"
+  }]
+}*/

@@ -11,48 +11,77 @@ import (
 )
 
 type CoinbaseStream struct {
-	messages chan Message
+	out    chan Message
+	signal chan int
+	socket *websocket.Conn
 }
 
-func (s *CoinbaseStream) Start() chan Message {
-	s.messages = make(chan Message)
-	ws, err := s.subscribe()
-	if err != nil {
-		log.Println("[coinbase]", err)
-		return s.messages
+func NewCoinbaseStream() *CoinbaseStream {
+	return &CoinbaseStream{
+		out:    make(chan Message),
+		signal: make(chan int),
 	}
-	go func() {
-		defer ws.Close()
-		for {
-			messageType, b, err := ws.ReadMessage()
-			if err != nil {
-				log.Println("[coinbase]", err)
-				return
-			}
-			switch messageType {
-			case websocket.TextMessage:
-				go s.send(b)
-			default:
-			}
-		}
-	}()
-	return s.messages
 }
 
-func (s *CoinbaseStream) subscribe() (*websocket.Conn, error) {
-	ws, _, err := websocket.DefaultDialer.Dial("wss://ws-feed.exchange.coinbase.com", nil)
+func (s *CoinbaseStream) Output() chan Message {
+	return s.out
+}
+
+func (s *CoinbaseStream) Start() {
+	go start(s)
+	s.signal <- 1
+}
+
+func (s *CoinbaseStream) Name() string {
+	return "coinbase"
+}
+
+func (s *CoinbaseStream) Signal() chan int {
+	return s.signal
+}
+
+func (s *CoinbaseStream) Connect() error {
+	return s.connect()
+}
+
+func (s *CoinbaseStream) Listen() {
+	s.listen()
+}
+
+func (s *CoinbaseStream) Close() {
+	if s.socket != nil {
+		s.socket.Close()
+	}
+}
+
+func (s *CoinbaseStream) connect() error {
+	var err error
+	s.socket, _, err = websocket.DefaultDialer.Dial("wss://ws-feed.exchange.coinbase.com", nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	subscribeMsg := map[string]interface{}{
 		"type":        "subscribe",
 		"product_ids": db.TrackedPairs("coinbase"),
 		"channels":    []string{"ticker"},
 	}
-	if err := ws.WriteJSON(subscribeMsg); err != nil {
-		return nil, err
+	return s.socket.WriteJSON(subscribeMsg)
+}
+
+func (s *CoinbaseStream) listen() {
+	for {
+		messageType, b, err := s.socket.ReadMessage()
+		if err != nil {
+			log.Println("[coinbase]", err)
+			return
+		}
+		switch messageType {
+		case websocket.TextMessage:
+			go s.send(b)
+		default:
+		}
 	}
-	return ws, nil
+	s.signal <- 2
 }
 
 func (s *CoinbaseStream) send(b []byte, args ...interface{}) {
@@ -64,14 +93,13 @@ func (s *CoinbaseStream) send(b []byte, args ...interface{}) {
 	if !ok {
 		return
 	}
-	s.messages <- Message{
+	s.out <- Message{
 		Topic:   "tickers",
 		Key:     t.Key(),
 		Payload: t.Bytes(),
 	}
 }
 
-// https://docs.cdp.coinbase.com/exchange/websocket-feed/channels#ticker-channel
 func (p *CoinbaseStream) pair(b []byte) (string, bool) {
 	v := struct {
 		ProductID string `json:"product_id"`
@@ -80,27 +108,6 @@ func (p *CoinbaseStream) pair(b []byte) (string, bool) {
 	return v.ProductID, err == nil
 }
 
-/*
-	{
-	  "type": "ticker",
-	  "sequence": 37475248783,
-	  "product_id": "ETH-USD",
-	  "price": "1285.22",
-	  "open_24h": "1310.79",
-	  "volume_24h": "245532.79269678",
-	  "low_24h": "1280.52",
-	  "high_24h": "1313.8",
-	  "volume_30d": "9788783.60117027",
-	  "best_bid": "1285.04",
-	  "best_bid_size": "0.46688654",
-	  "best_ask": "1285.27",
-	  "best_ask_size": "1.56637040",
-	  "side": "buy",
-	  "time": "2022-10-19T23:28:22.061769Z",
-	  "trade_id": 370843401,
-	  "last_size": "11.4396987"
-	}
-*/
 type CoinbaseTicker struct {
 	Type        string `json:"type"`
 	Sequence    int    `json:"sequence"`
@@ -136,3 +143,24 @@ func (v *CoinbaseTicker) Ticker() *Ticker {
 	}
 	return &t
 }
+
+// https://docs.cdp.coinbase.com/exchange/websocket-feed/channels#ticker-channel
+/*{
+  "type": "ticker",
+  "sequence": 37475248783,
+  "product_id": "ETH-USD",
+  "price": "1285.22",
+  "open_24h": "1310.79",
+  "volume_24h": "245532.79269678",
+  "low_24h": "1280.52",
+  "high_24h": "1313.8",
+  "volume_30d": "9788783.60117027",
+  "best_bid": "1285.04",
+  "best_bid_size": "0.46688654",
+  "best_ask": "1285.27",
+  "best_ask_size": "1.56637040",
+  "side": "buy",
+  "time": "2022-10-19T23:28:22.061769Z",
+  "trade_id": 370843401,
+  "last_size": "11.4396987"
+}*/

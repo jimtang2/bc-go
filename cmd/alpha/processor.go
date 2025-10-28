@@ -88,9 +88,9 @@ func (m *Market) Void(t *stream.Ticker, d time.Duration) {
 }
 
 func (m *Market) Seek() *Alpha {
-	m.Lock()
+	m.mu.Lock()
 	if m.LowestAsk == nil || m.HighestBid == nil || m.LowestAsk.Exchange == m.HighestBid.Exchange {
-		m.Unlock()
+		m.mu.Unlock()
 		return nil
 	}
 	var (
@@ -101,7 +101,7 @@ func (m *Market) Seek() *Alpha {
 		spreadSize = 0.0
 		spreadVal  = spreadSize * spread
 	)
-	m.Unlock()
+	m.mu.Unlock()
 	if hi.BidSize < lo.AskSize {
 		spreadSize = hi.BidSize
 	} else {

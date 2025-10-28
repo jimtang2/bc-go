@@ -9,32 +9,52 @@ import (
 )
 
 type KrakenStream struct {
-	messages chan Message
+	out    chan Message
+	signal chan int
+	socket *websocket.Conn
 }
 
-func (s *KrakenStream) Start() chan Message {
-	s.messages = make(chan Message)
-	ws, err := s.subscribe()
-	if err != nil {
-		log.Println("[kraken]", err)
-		return s.messages
+func NewKrakenStream() *KrakenStream {
+	return &KrakenStream{
+		out:    make(chan Message),
+		signal: make(chan int),
 	}
-	go func() {
-		defer ws.Close()
-		for {
-			_, b, err := ws.ReadMessage()
-			if err != nil {
-				log.Println("[kraken]", err)
-				return
-			}
-			go s.send(b)
-		}
-	}()
-	return s.messages
 }
 
-func (s *KrakenStream) subscribe() (*websocket.Conn, error) {
-	ws, _, err := websocket.DefaultDialer.Dial("wss://ws.kraken.com/v2", nil)
+func (s *KrakenStream) Output() chan Message {
+	return s.out
+}
+
+func (s *KrakenStream) Start() {
+	go start(s)
+	s.signal <- 1
+}
+
+func (s *KrakenStream) Name() string {
+	return "kraken"
+}
+
+func (s *KrakenStream) Signal() chan int {
+	return s.signal
+}
+
+func (s *KrakenStream) Connect() error {
+	return s.connect()
+}
+
+func (s *KrakenStream) Listen() {
+	s.listen()
+}
+
+func (s *KrakenStream) Close() {
+	if s.socket != nil {
+		s.socket.Close()
+	}
+}
+
+func (s *KrakenStream) connect() error {
+	var err error
+	s.socket, _, err = websocket.DefaultDialer.Dial("wss://ws.kraken.com/v2", nil)
 	m := struct {
 		Method string `json:"method"`
 		Params struct {
@@ -43,12 +63,24 @@ func (s *KrakenStream) subscribe() (*websocket.Conn, error) {
 		} `json:"params"`
 	}{}
 	if err != nil {
-		return nil, err
+		return err
 	}
 	m.Method = "subscribe"
 	m.Params.Channel = "ticker"
 	m.Params.Symbol = db.TrackedPairs("kraken")
-	return ws, ws.WriteJSON(m)
+	return s.socket.WriteJSON(m)
+}
+
+func (s *KrakenStream) listen() {
+	for {
+		_, b, err := s.socket.ReadMessage()
+		if err != nil {
+			log.Println("[kraken]", err)
+			break
+		}
+		go s.send(b)
+	}
+	s.signal <- 2
 }
 
 func (s *KrakenStream) send(b []byte, args ...interface{}) {
@@ -60,32 +92,13 @@ func (s *KrakenStream) send(b []byte, args ...interface{}) {
 	if !ok {
 		return
 	}
-	s.messages <- Message{
+	s.out <- Message{
 		Topic:   "tickers",
 		Key:     t.Key(),
 		Payload: t.Bytes(),
 	}
 }
 
-// https://docs.kraken.com/api/docs/websocket-v2/ticker
-/*{
-  "channel": "ticker",
-  "type": "snapshot",
-  "data": [{
-    "symbol": "ALGO/USD",
-    "bid": 0.10025,
-    "bid_qty": 740.0,
-    "ask": 0.10036,
-    "ask_qty": 1361.44813783,
-    "last": 0.10035,
-    "volume": 997038.98383185,
-    "vwap": 0.10148,
-    "low": 0.09979,
-    "high": 0.10285,
-    "change": -0.00017,
-    "change_pct": -0.17
-  }]
-}*/
 type KrakenTicker struct {
 	Channel string `json:"channel"`
 	Type    string `json:"type"`
@@ -120,6 +133,25 @@ func (v *KrakenTicker) Ticker() *Ticker {
 	return t
 }
 
+// https://docs.kraken.com/api/docs/websocket-v2/ticker
+/*{
+  "channel": "ticker",
+  "type": "snapshot",
+  "data": [{
+    "symbol": "ALGO/USD",
+    "bid": 0.10025,
+    "bid_qty": 740.0,
+    "ask": 0.10036,
+    "ask_qty": 1361.44813783,
+    "last": 0.10035,
+    "volume": 997038.98383185,
+    "vwap": 0.10148,
+    "low": 0.09979,
+    "high": 0.10285,
+    "change": -0.00017,
+    "change_pct": -0.17
+  }]
+}*/
 /*
 	{
 		"method": "subscribe",
