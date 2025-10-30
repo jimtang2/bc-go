@@ -1,6 +1,3 @@
-// webhook$$bc-go;dashboard/client/src/components/table-trades.tsx;grok$$
-"use client"
-
 import React from 'react';
 import {
   Table,
@@ -12,7 +9,7 @@ import {
 } from '@/components/ui/table';
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table';
 
-const TradesTable: React.FC = () => {
+const HistoryTable: React.FC = () => {
   const data: string[] = []
   const columns: ColumnDef<string, any>[] = [];
   const table = useReactTable({
@@ -21,7 +18,7 @@ const TradesTable: React.FC = () => {
     getCoreRowModel: getCoreRowModel(),
   });
   return (
-    <div className="mx-4 lg:mx-6 overflow-hidden rounded-lg border">
+    <div className="mx-2 lg:mx-3 overflow-hidden rounded-lg border">
       <Table>
         <TableHeader className="bg-muted">
           {table.getHeaderGroups().map((headerGroup) => (
@@ -57,5 +54,4 @@ const TradesTable: React.FC = () => {
     </div>
   );
 };
-
-export default TradesTable;
+export default HistoryTable;

@@ -39,7 +39,7 @@ func main() {
 
 func startHttp() {
 	http.Handle("/", http.FileServer(http.Dir("dist")))
-	http.Handle("/ws", NewSocketHandler())
+	http.Handle("/ws/alpha", NewSocketHandler())
 	log.Println("dashboard listening on", viper.GetString("http.port"))
 	if err := http.ListenAndServe(viper.GetString("http.port"), cors.New(cors.Options{
 		AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),
