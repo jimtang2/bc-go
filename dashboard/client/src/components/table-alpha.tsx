@@ -1,6 +1,7 @@
 // webhook$$bc-go;dashboard/client/src/components/table-pairs.tsx;grok$$
 "use client"
 import React, { useState, useEffect } from 'react';
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 // import { Label } from "@/components/ui/label";
 // import { Input } from "@/components/ui/input";
@@ -10,8 +11,108 @@ import {
   useReactTable, getCoreRowModel, flexRender, type ColumnDef, } from '@tanstack/react-table';
 import { useDataStore, type Alpha } from '../DataManager';
 import clsx from "clsx";
-import exchangeIcons from "@/components/icon"
-
+import ExchangeIcon from "@/components/icon"
+import { Pause, Play } from 'lucide-react';
+const columns: ColumnDef<Alpha,any>[] = [
+  { 
+    header: 'Event Time',
+    size: 5, 
+    accessorFn: ({ at, bt }) => {
+      if (at > 0) return new Date(at)
+      else if (bt > 0) return new Date(bt)
+      else return new Date()
+    },
+    cell: (info) => <span className="font-mono">{info.getValue().toLocaleTimeString()}</span>,
+  },
+  { 
+    header: 'TTL',
+    size: 5, 
+    accessorFn: ({ at, bt }) => {
+      if (at > 0) return new Date(at)
+      else if (bt > 0) return new Date(bt)
+      else return new Date()
+    },
+    cell: (info) => <TTLCell date={info.getValue()} />,
+  },
+  { 
+    header: 'Asset', 
+    accessorKey: 'p',
+    size: 5, 
+    cell: (info) => <span className="font-normal">{info.getValue().split(":")[0]}</span>,
+  },
+  { 
+    header: 'Volume', 
+    accessorKey: 'ss',
+    size: 12, 
+    cell: (info) => <span className="font-light font-mono">{info.getValue().toFixed(3)}</span>,
+  },
+  { 
+    header: 'Buy Ex.', 
+    accessorKey: 'ax',
+    size: 12, 
+    cell: (info) => {
+      const name = info.getValue()
+      return <div className="flex flex-row gap-2 items-center">
+        <ExchangeIcon exchange={info.getValue().toLowerCase()} />
+        <span className="font-normal">{name}</span>
+      </div>
+    },
+  },
+  { 
+    header: 'Buy', 
+    accessorKey: 'ap',
+    size: 12, 
+    cell: (info) => <span className="font-light font-mono">{info.getValue().toFixed(3)}</span>,
+  },
+  { 
+    header: 'Sell Ex.', 
+    accessorKey: 'bx',
+    size: 12, 
+    cell: (info) => {
+      const name = info.getValue()
+      return <div className="flex flex-row gap-2 items-center">
+        <ExchangeIcon exchange={info.getValue().toLowerCase()} />
+        <span className="font-normal">{name}</span>
+      </div>
+    },
+  },
+  { 
+    header: 'Sell', 
+    accessorKey: 'bp',
+    size: 12, 
+    cell: (info) => <span className="font-light font-mono">{info.getValue().toFixed(3)}</span>,
+  },
+  // { 
+  //   header: 'Spread', 
+  //   accessorKey: 's',
+  //   size: 10, 
+  //   cell: (info) => <span className="font-bold">{info.getValue().toFixed(2)}</span>,
+  // },
+  { 
+    header: 'Fee %', 
+    accessorFn: ({af, bf}) => (af+bf).toFixed(2).toString(),
+    size: 7.5, 
+    cell: (info) => <span className="">{info.getValue()}%</span>,
+  },
+  { 
+    header: 'Spread %', 
+    accessorFn: ({sr, af, bf}) => [sr, (af+bf).toFixed(2)],
+    size: 7.5, 
+    cell: (info) => {
+      const [sr, f] = info.getValue()
+      return <span className={clsx(["font-bold", sr>f ? "text-green-500" : "text-red-500"])}>{(sr*100).toFixed(2)}%</span>
+    },
+  },
+  { 
+    header: 'P/L $',
+    size: 10, 
+    accessorKey: 'pl',
+    cell: (info) => {
+      const pl = info.getValue()
+      return <span className={clsx(["font-bold", pl > 0 ? 'text-green-500' : 'text-red-500'])}>{pl.toFixed(2)}</span> 
+    }        
+  },
+];
 const AlphaTable: React.FC = () => {
   const { 
     alpha,
@@ -30,103 +131,6 @@ const AlphaTable: React.FC = () => {
     // filter alpha buffer 
     setData(alpha.filter(({sr}) => sr*100 > minSpreadPct))
   }, [minSpreadPct])
-  const columns: ColumnDef<Alpha,any>[] = [
-    { 
-      header: 'Event Time',
-      size: 5, 
-      accessorFn: ({ at, bt }) => {
-        if (at > 0) return new Date(at)
-        else if (bt > 0) return new Date(bt)
-        else return new Date()
-      },
-      cell: (info) => <span>{info.getValue().toLocaleTimeString()}</span>,
-    },
-    { 
-      header: 'TTL',
-      size: 5, 
-      accessorFn: ({ at, bt }) => {
-        if (at > 0) return new Date(at)
-        else if (bt > 0) return new Date(bt)
-        else return new Date()
-      },
-      cell: (info) => <TTLCell date={info.getValue()} />,
-    },
-    { 
-      header: 'Asset', 
-      accessorKey: 'p',
-      size: 5, 
-      cell: (info) => <span className="font-normal">{info.getValue().split(":")[0]}</span>,
-    },
-    { 
-      header: 'Volume', 
-      accessorKey: 'ss',
-      size: 10, 
-      cell: (info) => <span className="font-light">{info.getValue().toFixed(5)}</span>,
-    },
-    { 
-      header: 'Buy Ex.', 
-      accessorKey: 'ax',
-      size: 15, 
-      cell: (info) => {
-        const name = info.getValue()
-        return <div className="flex flex-row gap-2 items-center">
-          {exchangeIcons[info.getValue().toLowerCase()]()}
-          <span className="font-normal">{name}</span>
-        </div>
-      },
-    },
-    { 
-      header: 'Sell Ex.', 
-      accessorKey: 'bx',
-      size: 15, 
-      cell: (info) => {
-        const name = info.getValue()
-        return <div className="flex flex-row gap-2 items-center">
-          {exchangeIcons[info.getValue().toLowerCase()]()}
-          <span className="font-normal">{name}</span>
-        </div>
-      },
-    },
-    { 
-      header: 'Buy', 
-      accessorKey: 'ap',
-      size: 10, 
-      cell: (info) => <span className="font-light">{info.getValue().toFixed(4)}</span>,
-    },
-    { 
-      header: 'Sell', 
-      accessorKey: 'bp',
-      size: 10, 
-      cell: (info) => <span className="font-light">{info.getValue().toFixed(4)}</span>,
-    },
-    // { 
-    //   header: 'Spread', 
-    //   accessorKey: 's',
-    //   size: 10, 
-    //   cell: (info) => <span className="font-bold">{info.getValue().toFixed(2)}</span>,
-    // },
-    { 
-      header: 'Spread %', 
-      accessorKey: 'sr',
-      size: 10, 
-      cell: (info) => <span className="font-bold">{(info.getValue()*100).toFixed(3)}%</span>,
-    },
-    { 
-      header: 'Fee %', 
-      accessorFn: ({af, bf}) => (af+bf).toFixed(2).toString(),
-      size: 10, 
-      cell: (info) => <span className="">{info.getValue()}%</span>,
-    },
-    { 
-      header: 'P/L $',
-      size: 10, 
-      accessorKey: 'pr',
-      cell: (info) => {
-        const p = info.getValue()
-        return <span className={clsx(["font-bold", p > 0 ? 'text-green-500' : 'text-red-500'])}>{p.toFixed(2)}</span> 
-      }        
-    },
-  ];
   const table = useReactTable({
     data: data,
     columns,
@@ -142,9 +146,9 @@ const AlphaTable: React.FC = () => {
   return (
     <div className="mx-2 lg:mx-3 overflow-hidden rounded-lg border">
       <div className="mx-2 my-2 flex flex-row gap-2">
-        <div className="flex-grow-1"></div>
+        <StreamControls className="flex-grow-1 flex flex-row items-center" data={data.length > 0 ? data[0] : null} />
         <div className="flex flex-row items-center gap-2">
-           <Select value={`${displayCount.toString()}`} onValueChange={handleChangeDisplayCount}>
+          <Select value={`${displayCount.toString()}`} onValueChange={handleChangeDisplayCount}>
             <SelectTrigger className="w-24">
               <SelectValue placeholder="Display Count" />
             </SelectTrigger>
@@ -173,7 +177,7 @@ const AlphaTable: React.FC = () => {
               </SelectGroup>
             </SelectContent>
           </Select>        
-        </div>        
+        </div>
       </div>
       <Table>
         <TableHeader className="bg-muted">
@@ -187,7 +191,7 @@ const AlphaTable: React.FC = () => {
             </TableRow>
           ))}
         </TableHeader>
-        <TableBody>
+        <TableBody className="font-mono">
           {table.getRowModel().rows.length ? (
             table.getRowModel().rows.map((row, i) => 
               i < displayCount ?
@@ -229,4 +233,32 @@ const TTLCell = ({ date }: { date: Date; }) => {
     </div>
   </div>;
 }
+interface StreamControlsProps {
+  className?: string;
+  data: Alpha | null;
+};
+
+const StreamControls = ({ className = "", data }: StreamControlsProps) => {
+  const [ latency, setLatency ] = useState(0)
+  const { status, reconnect, disconnect } = useDataStore();
+  useEffect(() => {
+    if (!data) {
+      return
+    }
+    const { at, bt } = data
+    if (at > 0) {
+      setLatency(Date.now() - at)
+    } else if (bt > 0) {
+      setLatency(Date.now() - bt)
+    }
+  }, [data])
+  console.log(latency)
+  return <div className={className}>
+    {status === "connected" ? 
+    <Button variant="ghost" size="icon" onClick={disconnect}><Pause /></Button> : 
+    <Button variant="ghost" size="icon" onClick={reconnect}><Play /></Button>}
+    <span className="text-sm">{latency.toString().padStart(4, " ")} ms</span>
+  </div>
+
+};
 export default AlphaTable

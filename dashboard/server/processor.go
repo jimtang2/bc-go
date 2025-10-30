@@ -43,7 +43,7 @@ func (p *Processor) process(m *sarama.ConsumerMessage) ([]byte, error) {
 		BidTime:     v.Bid.EventTime,
 		AskFee:      p.exchanges[v.Ask.Exchange].TakerFee,
 		BidFee:      p.exchanges[v.Bid.Exchange].TakerFee,
-		Profit:      p.calcProfit(v.Ask, v.Bid),
+		ExpPL:       p.calcProfit(v.Ask, v.Bid),
 	})
 }
 
@@ -90,5 +90,5 @@ type MessageOutgoing struct {
 	BidTime     int64   `json:"bt"`
 	AskFee      float64 `json:"af"`
 	BidFee      float64 `json:"bf"`
-	Profit      float64 `json:"pr"`
+	ExpPL       float64 `json:"pl"`
 }

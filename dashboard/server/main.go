@@ -52,13 +52,12 @@ func startHttp() {
 
 func consume() {
 	var (
-		err           error
-		brokers       = viper.GetStringSlice("kafka.brokers")
-		config        = sarama.NewConfig()
-		topicIn       = "alpha"
-		initialOffset = -200
-		consumer      sarama.Consumer
-		processor     = NewProcessor()
+		err       error
+		brokers   = viper.GetStringSlice("kafka.brokers")
+		config    = sarama.NewConfig()
+		topicIn   = "alpha"
+		consumer  sarama.Consumer
+		processor = NewProcessor()
 	)
 	config.Consumer.Offsets.Initial = sarama.OffsetNewest
 	if consumer, err = sarama.NewConsumer(brokers, config); err != nil {
@@ -71,15 +70,7 @@ func consume() {
 			log.Fatal(err)
 		}
 		for _, partition := range partitionList {
-			latest, err := consumer.GetOffset(topicIn, partition, sarama.OffsetNewest)
-			if err != nil {
-				log.Fatal(err)
-			}
-			target := latest + initialOffset
-			if target < 0 {
-				target = sarama.OffsetOldest
-			}
-			pc, err := consumer.ConsumePartition(topicIn, partition, target)
+			pc, err := consumer.ConsumePartition(topicIn, partition, sarama.OffsetNewest)
 			if err != nil {
 				log.Fatal(err)
 			}

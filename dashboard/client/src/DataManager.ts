@@ -29,6 +29,7 @@ export interface Alpha {
   bt: number; // bid time
   af: number; // ask fee
   bf: number; // bid fee
+  pl: number; // p/l
 }
 
 interface DashboardDataState {
