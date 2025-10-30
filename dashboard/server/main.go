@@ -2,8 +2,6 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -54,11 +52,13 @@ func startHttp() {
 
 func consume() {
 	var (
-		err      error
-		brokers  = viper.GetStringSlice("kafka.brokers")
-		config   = sarama.NewConfig()
-		topicIn  = "alpha"
-		consumer sarama.Consumer
+		err           error
+		brokers       = viper.GetStringSlice("kafka.brokers")
+		config        = sarama.NewConfig()
+		topicIn       = "alpha"
+		initialOffset = -200
+		consumer      sarama.Consumer
+		processor     = NewProcessor()
 	)
 	config.Consumer.Offsets.Initial = sarama.OffsetNewest
 	if consumer, err = sarama.NewConsumer(brokers, config); err != nil {
@@ -71,7 +71,15 @@ func consume() {
 			log.Fatal(err)
 		}
 		for _, partition := range partitionList {
-			pc, err := consumer.ConsumePartition(topicIn, partition, sarama.OffsetNewest)
+			latest, err := consumer.GetOffset(topicIn, partition, sarama.OffsetNewest)
+			if err != nil {
+				log.Fatal(err)
+			}
+			target := latest + initialOffset
+			if target < 0 {
+				target = sarama.OffsetOldest
+			}
+			pc, err := consumer.ConsumePartition(topicIn, partition, target)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -79,7 +87,9 @@ func consume() {
 				defer pc.Close()
 				for {
 					if m, ok := <-pc.Messages(); ok {
-						channel <- process(m)
+						if b, err := processor.process(m); err == nil {
+							channel <- b
+						}
 					}
 				}
 			}(pc)
@@ -87,13 +97,4 @@ func consume() {
 		select {}
 	}()
 	select {}
-}
-
-func process(m *sarama.ConsumerMessage) []byte {
-	return bytes.Replace(
-		m.Value,
-		[]byte("{"),
-		[]byte(fmt.Sprintf(`{"id":%v,`, m.Offset)),
-		1,
-	)
 }

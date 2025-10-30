@@ -1,18 +1,12 @@
 // webhook$$bc-go;dashboard/client/src/components/nav-secondary.tsx;grok$$
 import React from 'react';
-import {
-  SidebarGroup,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarSeparator,
-} from '@/components/ui/sidebar';
-import { Settings, Search } from 'lucide-react';
+// import { SidebarGroup, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarSeparator } from '@/components/ui/sidebar';
+// import { Settings, Search } from 'lucide-react';
 
 const NavSecondary: React.FC = () => {
   return (
     <>
-      <SidebarSeparator />
+{/*      <SidebarSeparator />
       <SidebarGroup>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -28,7 +22,7 @@ const NavSecondary: React.FC = () => {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-      </SidebarGroup>
+      </SidebarGroup>*/}
     </>
   );
 };

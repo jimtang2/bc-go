@@ -1,27 +1,28 @@
 -- for dashboard/dashboard-ui mock exchanges endpoint to create columns in dashboard-ui/src/table-pairs.tsx
 CREATE TABLE exchanges (
     id TEXT PRIMARY KEY,
-    name TEXT
+    name TEXT NOT NULL,
+    taker_fee DECIMAL NOT NULL,
+    maker_fee DECIMAL NOT NULL
 );
 
-insert into exchanges (id, name) values
-    ('binance','Binance'),
-    ('bitfinex','Bitfinex'),
-    ('uniswap','Uniswap'),
-    ('coinbase','Coinbase'),
-    ('kraken','Kraken'),
-    ('bybit','Bybit'),
-    ('okx','OKX'),
-    ('gemini','Gemini')
-on conflict do nothing;
-
+INSERT INTO exchanges (id, name, taker_fee, maker_fee) VALUES
+    ('binance',   'Binance',   0.10, 0.10),  -- 0.10%
+    ('bitfinex',  'Bitfinex',  0.20, 0.10),  -- 0.20% taker, 0.10% maker
+    ('uniswap',   'Uniswap',   0.30, 0.30),  -- ~0.30% (varies by pool)
+    ('coinbase',  'Coinbase',  0.60, 0.40),  -- 0.60% taker, 0.40% maker
+    ('kraken',    'Kraken',    0.26, 0.16),  -- 0.26% taker, 0.16% maker
+    ('bybit',     'Bybit',     0.10, 0.06),  -- 0.10% taker, 0.06% maker
+    ('okx',       'OKX',       0.10, 0.08),  -- 0.10% taker, 0.08% maker
+    ('gemini',    'Gemini',    0.35, 0.25)   -- 0.35% taker, 0.25% maker
+ON CONFLICT DO NOTHING;
 
 -- for dashboard/dashboard-ui mock pairs endpoint to create rows in dashboard-ui/src/table-pairs.tsx
 -- for fetcher fetched pairs 
 CREATE TABLE pairs (
     id SERIAL PRIMARY KEY,
-    name TEXT,
-    exchange TEXT,
+    name TEXT NOT NULL,
+    exchange TEXT NOT NULL,
     UNIQUE(name, exchange)
 );
 

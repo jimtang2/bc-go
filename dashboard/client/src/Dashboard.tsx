@@ -2,9 +2,9 @@
 import React from 'react';
 import AppSidebar from './components/app-sidebar';
 import SiteHeader from './components/site-header';
-import SectionCards from './components/section-cards';
-import TradesTable from './components/table-trades';
-import PairsTable from './components/table-pairs';
+// import SectionCards from './components/section-cards';
+// import TradesTable from './components/table-trades';
+import AlphaTable from './components/table-alpha';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
 const Dashboard: React.FC = () => {
@@ -12,7 +12,7 @@ const Dashboard: React.FC = () => {
     <SidebarProvider
       style={
         {
-          '--sidebar-width': 'calc(var(--spacing) * 65)',
+          '--sidebar-width': 'calc(var(--spacing) * 50)',
           '--header-height': 'calc(var(--spacing) * 12)',
         } as React.CSSProperties
       }
@@ -23,9 +23,9 @@ const Dashboard: React.FC = () => {
         <SiteHeader />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+            <div className="flex flex-col gap-4 py-4 md:gap-4 md:py-4">
               {/*<SectionCards />*/}
-              <PairsTable />
+              <AlphaTable />
               {/*<TradesTable />*/}
             </div>
           </div>

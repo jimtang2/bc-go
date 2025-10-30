@@ -1,7 +1,6 @@
 // webhook$$bc-go;dashboard/client/src/DataManager.ts;grok$$
 import { create } from 'zustand';
 import { w3cwebsocket as WebSocket } from 'websocket';
-import type { IMessageEvent, ICloseEvent } from 'websocket';
 import { produce } from "immer";
 
 export interface Ticker {
@@ -15,21 +14,30 @@ export interface Ticker {
 }
 
 export interface Alpha {
-  id: number;
-  ask: Ticker;
-  bid: Ticker;
+  i: number; // id
   p: string; // pair
   s: number; // spread
   sr: number; // spread ratio
   ss: number; // spread size
+  ax: string; // ask exchange
+  bx: string; // bid exchange
+  ap: number; // ask price
+  bp: number; // bid price
+  as: number; // ask size
+  bs: number; // bid size
+  at: number; // ask time
+  bt: number; // bid time
+  af: number; // ask fee
+  bf: number; // bid fee
 }
 
 interface DashboardDataState {
   alpha: Alpha[];
-  exchanges: string[];
-  pairs: string[];
+  minSpreadPct: number;
   status: 'connected' | 'disconnected' | 'retry';
   reconnect: () => void;
+  disconnect: () => void;
+  setMinSpreadPct: (val: number) => void;
 }
 
 const API_HOST = process.env.NODE_ENV === 'production' ? document.location.host : 'localhost:8080';
@@ -44,15 +52,12 @@ export const useDataStore = create<DashboardDataState>((set, get) => {
       set(state => ({ ...state, status: 'connected' }));
     };
     
-    ws.onmessage = (event: IMessageEvent) => {
+    ws.onmessage = (event) => {
       try {
-        const message = JSON.parse(event.data)
+        const message = JSON.parse(event.data.toString())
         set(produce((draft: DashboardDataState) => {
-          if (!draft.alpha) {
-            draft.alpha = []
-          }
-          draft.alpha.unshift(message as Alpha);
-          if (draft.alpha.length > 20) {
+          draft.alpha.unshift(message);
+          if (draft.alpha.length > 200) {
             draft.alpha.pop()
           }
         }));
@@ -61,12 +66,12 @@ export const useDataStore = create<DashboardDataState>((set, get) => {
       }
     };
     
-    ws.onclose = (event: ICloseEvent) => {
+    ws.onclose = (event) => {
       set(state => ({ ...state, status: 'disconnected' }));
       console.log('WebSocket disconnected:', event.code, event.reason);
     };
 
-    ws.onerror = (error: Error) => {
+    ws.onerror = (error) => {
       console.error('WebSocket error:', error)
       ws?.close();
     };
@@ -89,13 +94,24 @@ export const useDataStore = create<DashboardDataState>((set, get) => {
     }
   };
 
+  const disconnect = async () => {
+    ws?.close();
+  };
+
+  const setMinSpreadPct = (newMinSpreadPct: number) => {
+    set(produce((draft: DashboardDataState) => {
+      draft.minSpreadPct = newMinSpreadPct
+    }));
+  }
+
   setupWebSocket();
 
   return { 
     alpha: [],
-    exchanges: [],
-    pairs: [], 
+    minSpreadPct: 0.025,
     status: 'disconnected',
     reconnect,
+    disconnect,
+    setMinSpreadPct,
   };
 });

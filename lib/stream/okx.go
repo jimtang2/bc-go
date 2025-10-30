@@ -81,7 +81,7 @@ func (s *OKXStream) listen() {
 		_, b, err := s.socket.ReadMessage()
 		if err != nil {
 			log.Println("[okx]", err)
-			return
+			break
 		}
 		go s.send(b)
 	}

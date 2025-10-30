@@ -11,55 +11,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table';
-import { useDataStore, type Trade } from '../DataManager';
 
 const TradesTable: React.FC = () => {
-  const { trades } = useDataStore();
-
-  const columns: ColumnDef<Trade>[] = [
-    { 
-      accessorKey: 'p', 
-      header: 'Pair', 
-      size: 25, 
-      accessorFn: (row) => row.p,
-   },
-    { 
-      accessorKey: 'x', 
-      header: 'Exchanges', 
-      size: 25, 
-      accessorFn: (row) => row.x.join(', '), 
-    },
-    { 
-      accessorKey: 'q', 
-      header: 'Time', 
-      size: 20, 
-      accessorFn: (row) => new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }).format(new Date(row.q)), 
-    },
-    { 
-      accessorKey: 'e', 
-      header: 'Executed', 
-      size: 20, 
-      accessorFn: (row) => new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }).format(new Date(row.e)), 
-    },
-    { 
-      accessorKey: 'm', 
-      header: 'Margin', 
-      size: 10, 
-      accessorFn: (row) => row.m, 
-      cell: (info) => {
-        const margin = (info.getValue() as number).toFixed(3);
-        const isPositive = parseFloat(margin) > 0;
-        return <span className={isPositive ? 'text-accent-foreground' : ''}>{margin}%</span>;
-      }, 
-    },
-  ];
-
+  const data: string[] = []
+  const columns: ColumnDef<string, any>[] = [];
   const table = useReactTable({
-    data: trades,
+    data,
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
-
   return (
     <div className="mx-4 lg:mx-6 overflow-hidden rounded-lg border">
       <Table>
