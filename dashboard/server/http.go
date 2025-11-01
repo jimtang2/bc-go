@@ -1,17 +1,19 @@
-// webhook$$bc-go;dashboard/server/http.go;grok$$
 package main
 
 import (
 	"context"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/jimtang2/bc-go/lib/db"
 	_ "github.com/lib/pq"
 )
 
 type SocketHandler struct {
+	channel  chan []byte
 	upgrader websocket.Upgrader
 	mu       sync.Mutex
 	subs     map[*http.Request]chan []byte
@@ -19,6 +21,7 @@ type SocketHandler struct {
 
 func NewSocketHandler() *SocketHandler {
 	socket := &SocketHandler{
+		channel: make(chan []byte),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
@@ -34,7 +37,7 @@ func NewSocketHandler() *SocketHandler {
 // proxy global channel messages to all subs
 func (socket *SocketHandler) proxy() {
 	for {
-		b := <-channel
+		b := <-socket.channel
 		socket.mu.Lock()
 		for _, subChan := range socket.subs {
 			subChan <- b
@@ -90,4 +93,26 @@ func (socket *SocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+}
+
+type AlphaHandler struct{}
+
+func (h *AlphaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var (
+		limit, _  = strconv.Atoi(r.URL.Query().Get("l"))
+		offset, _ = strconv.Atoi(r.URL.Query().Get("o"))
+	)
+	if limit == 0 {
+		limit = 50
+	}
+	if offset == 0 {
+		offset = 0
+	}
+	b, err := db.AlphaItems(limit, offset)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(b)
 }

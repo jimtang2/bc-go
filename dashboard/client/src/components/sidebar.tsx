@@ -1,19 +1,19 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarSeparator, SidebarGroup, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
-import { Blend, History, Settings } from 'lucide-react';
+import { Scale, Blend, ArrowLeftRight, Settings } from 'lucide-react';
 import clsx from "clsx";
-const links = {
-  alpha: { to: '/', label: 'Home', paths: ['/', '/alpha'] },
-  settings: { to: '/settings', label: 'Settings' },
-  history: { to: '/history', label: 'History' },
-};
-const AppSidebar: React.FC<{ variant?: 'sidebar' | 'floating' | 'inset' }> = ({ variant }) => {
-  
+function SidebarMenuButtonLink({to, children}: {to: string; children?: React.ReactNode;}) {
+  const { pathname } = useLocation();
+  const className = clsx(["flex flex-row items-center w-full gap-2", pathname === to ? "text-gray-100" : "text-gray-500"])
+  return <Link to={to} className={className}>{children}</Link>
+}
+export default () => {
   return (
-    <Sidebar variant={variant}>
+    <Sidebar variant="inset">
       <SidebarHeader>
-        <div className="flex flex-col gap-2 p-2">
+        <div className="flex flex-row items-center gap-3 p-2">
+          <Scale className="h-5 w-5" />
           <span className="text-lg font-semibold">Arbitrage</span>
         </div>
       </SidebarHeader>
@@ -22,15 +22,17 @@ const AppSidebar: React.FC<{ variant?: 'sidebar' | 'floating' | 'inset' }> = ({ 
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton>
-                <SidebarMenuButtonLink {...links.alpha}>
-                  <Blend className="mr-2 h-4 w-4" />
+                <SidebarMenuButtonLink to="/">
+                  <ArrowLeftRight className="h-4 w-4" />
+                  <span>Spreads</span>
                 </SidebarMenuButtonLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton>
-                <SidebarMenuButtonLink {...links.history}>
-                  <History className="mr-2 h-4 w-4" />
+                <SidebarMenuButtonLink to="/alpha">
+                  <Blend className="h-4 w-4" />
+                  <span>Alpha</span>
                 </SidebarMenuButtonLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -41,8 +43,9 @@ const AppSidebar: React.FC<{ variant?: 'sidebar' | 'floating' | 'inset' }> = ({ 
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton>
-                <SidebarMenuButtonLink {...links.settings}>
-                  <Settings className="mr-2 h-4 w-4" />
+                <SidebarMenuButtonLink to="/settings">
+                  <Settings className="h-4 w-4" />
+                  <span>Settings</span>
                 </SidebarMenuButtonLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -61,25 +64,4 @@ const AppSidebar: React.FC<{ variant?: 'sidebar' | 'floating' | 'inset' }> = ({ 
       </SidebarFooter>
     </Sidebar>
   );
-}
-interface SidebarMenuButtonLinkProps {
-  to: string;
-  label: string;
-  paths?: string[];
-  children?: React.ReactNode;
-}
-function SidebarMenuButtonLink({ to, label, paths, children }: SidebarMenuButtonLinkProps) {
-  const { pathname } = useLocation();
-  const isActive = paths ? paths.includes(pathname) : pathname === to;
-  const className = clsx([
-    "flex flex-row items-center", 
-    isActive ? "text-gray-100" : "text-gray-500",
-  ])
-  return (
-    <Link key={to} to={to} className={className}>
-      {children}
-      <span>{label}</span>
-    </Link>
-    )
-}
-export default AppSidebar;
+};

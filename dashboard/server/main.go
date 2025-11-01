@@ -27,50 +27,48 @@ func init() {
 	}
 }
 
-var channel = make(chan []byte)
-
 func main() {
-	go startHttp()
-	go consume()
+	socketHandler := NewSocketHandler()
+	go consume("spreads", sarama.OffsetNewest, NewSpreadsProcessor(socketHandler.channel))
+	go consume("alpha", sarama.OffsetOldest, NewAlphaProcessor())
+	go func() {
+		http.Handle("/", http.FileServer(http.Dir("dist")))
+		http.Handle("/ws", socketHandler)
+		http.Handle("/alpha", &AlphaHandler{})
+		log.Println("dashboard listening on", viper.GetString("http.port"))
+		handler := cors.New(cors.Options{
+			AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),
+			AllowedMethods:   []string{"GET", "POST"},
+			AllowCredentials: false,
+		}).Handler(http.DefaultServeMux)
+		if err := http.ListenAndServe(viper.GetString("http.port"), handler); err != nil {
+			log.Fatal(err)
+		}
+	}()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 }
 
-func startHttp() {
-	http.Handle("/", http.FileServer(http.Dir("dist")))
-	http.Handle("/ws/alpha", NewSocketHandler())
-	log.Println("dashboard listening on", viper.GetString("http.port"))
-	if err := http.ListenAndServe(viper.GetString("http.port"), cors.New(cors.Options{
-		AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),
-		AllowedMethods:   []string{"GET", "POST"},
-		AllowCredentials: false,
-	}).Handler(http.DefaultServeMux)); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func consume() {
+func consume(topic string, offset int64, processor Processor) {
 	var (
-		err       error
-		brokers   = viper.GetStringSlice("kafka.brokers")
-		config    = sarama.NewConfig()
-		topicIn   = "alpha"
-		consumer  sarama.Consumer
-		processor = NewProcessor()
+		err      error
+		brokers  = viper.GetStringSlice("kafka.brokers")
+		config   = sarama.NewConfig()
+		consumer sarama.Consumer
 	)
-	config.Consumer.Offsets.Initial = sarama.OffsetNewest
+	config.Consumer.Offsets.Initial = offset
 	if consumer, err = sarama.NewConsumer(brokers, config); err != nil {
 		log.Fatal(err)
 	}
 	go func() {
 		defer consumer.Close()
-		partitionList, err := consumer.Partitions(topicIn)
+		partitionList, err := consumer.Partitions(topic)
 		if err != nil {
 			log.Fatal(err)
 		}
 		for _, partition := range partitionList {
-			pc, err := consumer.ConsumePartition(topicIn, partition, sarama.OffsetNewest)
+			pc, err := consumer.ConsumePartition(topic, partition, offset)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -78,8 +76,9 @@ func consume() {
 				defer pc.Close()
 				for {
 					if m, ok := <-pc.Messages(); ok {
-						if b, err := processor.process(m); err == nil {
-							channel <- b
+						if err := processor.Process(m); err != nil {
+							log.Println(err)
+							continue
 						}
 					}
 				}

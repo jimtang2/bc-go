@@ -93,3 +93,22 @@ insert into pairs (exchange, name) values
     ('okx', 'XRP-USDT'),
     ('okx', 'XRP-USDC')
 on conflict do nothing;
+
+CREATE TABLE IF NOT EXISTS alpha (
+    id              BIGINT PRIMARY KEY,
+    pair            TEXT NOT NULL,
+    spread          DOUBLE PRECISION NOT NULL,
+    volume          DOUBLE PRECISION NOT NULL,
+    ask_exchange    TEXT NOT NULL,
+    ask_price       DOUBLE PRECISION NOT NULL,
+    ask_size        DOUBLE PRECISION NOT NULL,
+    ask_time        BIGINT NOT NULL,
+    ask_fee         DOUBLE PRECISION NOT NULL,
+    bid_exchange    TEXT NOT NULL,
+    bid_price       DOUBLE PRECISION NOT NULL,
+    bid_size        DOUBLE PRECISION NOT NULL,
+    bid_time        BIGINT NOT NULL,
+    bid_fee         DOUBLE PRECISION NOT NULL,
+    profit          DOUBLE PRECISION NOT NULL,
+    timestamp       BIGINT NOT NULL
+);

@@ -74,3 +74,78 @@ type Exchange struct {
 	TakerFee float64 `json:"taker_fee"`
 	MakerFee float64 `json:"maker_fee"`
 }
+
+func InsertAlpha(a Alpha) error {
+	_, err := db().Exec(`insert into alpha (id, pair, spread, volume, ask_exchange, ask_price, ask_size, ask_time, ask_fee, bid_exchange, bid_price, bid_size, bid_time, bid_fee, profit, timestamp) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) on conflict do nothing`, a.ID, a.Pair, a.Spread, a.Volume, a.AskExchange, a.AskPrice, a.AskSize, a.AskTime, a.AskFee, a.BidExchange, a.BidPrice, a.BidSize, a.BidTime, a.BidFee, a.Profit, a.Timestamp)
+	return err
+}
+
+type Alpha struct {
+	ID          int64   `json:"i"` // offset id of 'alpha' topic
+	Pair        string  `json:"p"`
+	Spread      float64 `json:"s"`
+	Volume      float64 `json:"v"`
+	AskExchange string  `json:"ax"`
+	AskPrice    float64 `json:"ap"`
+	AskSize     float64 `json:"as"`
+	AskTime     int64   `json:"at"`
+	AskFee      float64 `json:"af"`
+	BidExchange string  `json:"bx"`
+	BidPrice    float64 `json:"bp"`
+	BidSize     float64 `json:"bs"`
+	BidTime     int64   `json:"bt"`
+	BidFee      float64 `json:"bf"`
+	Profit      float64 `json:"pl"`
+	Timestamp   int64   `json:"ts"`
+}
+
+type AlphaResponse struct {
+	Items  []Alpha `json:"items"`
+	Limit  int     `json:"limit"`
+	Offset int     `json:"offset"`
+	Period struct {
+		Count int     `json:"count"`
+		Start int64   `json:"start"`
+		Total float64 `json:"total"`
+	} `json:"period"`
+}
+
+func AlphaItems(limit, offset int) ([]byte, error) {
+	b := []byte{}
+	err := db().QueryRow(`SELECT 
+    json_build_object(
+        'items', COALESCE(json_agg(row_to_json(t)), '[]'),
+        'limit', $1,
+        'offset', $2,
+        'period', (
+            SELECT json_build_object(
+                'count', COUNT(*),
+                'start', MIN(timestamp),
+                'end', MAX(timestamp),
+                'total', COALESCE(SUM(profit), 0.0)
+            )
+            FROM alpha
+        )
+    ) AS response
+FROM (
+    SELECT
+        id,
+        ask_exchange,
+        ask_price,
+        ask_size,
+        ask_time,
+        bid_exchange,
+        bid_price,
+        bid_size,
+        bid_time,
+        pair,
+        spread,
+        volume,
+        profit,
+        timestamp
+    FROM alpha
+    ORDER BY timestamp DESC
+    LIMIT $1 OFFSET $2
+) t;`, limit, offset).Scan(&b)
+	return b, err
+}

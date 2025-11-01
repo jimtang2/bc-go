@@ -29,7 +29,7 @@ func main() {
 		brokers   = viper.GetStringSlice("kafka.brokers") // kafka brokers
 		config    = sarama.NewConfig()                    // kafka config
 		topicIn   = "tickers"                             // consumer topic
-		topicOut  = "alpha"                               // producer topic
+		topicsOut = []string{"spreads", "alpha"}          // producer topic
 		consumer  sarama.Consumer                         // kafka consumer
 		producer  sarama.SyncProducer                     // kafka producer
 		processor = NewProcessor()                        // stream processor
@@ -57,8 +57,7 @@ func main() {
 			go func(pc sarama.PartitionConsumer) {
 				defer pc.Close()
 				for {
-					s := <-pc.Messages()
-					processor.Process(s)
+					processor.Process(<-pc.Messages())
 				}
 			}(pc)
 		}
@@ -67,16 +66,28 @@ func main() {
 	// production
 	go func() {
 		for {
-			output := <-processor.out
-			if _, _, err := producer.SendMessage(
-				&sarama.ProducerMessage{
-					Topic: topicOut,
-					Key:   sarama.StringEncoder(output.Key()),
-					Value: sarama.ByteEncoder(output.Bytes()),
-				},
-			); err != nil {
-				log.Println(err)
-			}
+			a := <-processor.alphaChan
+			go func(a *Alpha) {
+				if _, _, err := producer.SendMessage(&sarama.ProducerMessage{
+					Topic: topicsOut[0],
+					Key:   sarama.StringEncoder(a.Key()),
+					Value: sarama.ByteEncoder(a.Bytes()),
+				}); err != nil {
+					log.Println(err)
+				}
+			}(a)
+			go func(a *Alpha) {
+				if a.Profit <= 0 {
+					return
+				}
+				if _, _, err := producer.SendMessage(&sarama.ProducerMessage{
+					Topic: topicsOut[1],
+					Key:   sarama.StringEncoder(a.Key()),
+					Value: sarama.ByteEncoder(a.Bytes()),
+				}); err != nil {
+					log.Println(err)
+				}
+			}(a)
 		}
 	}()
 	log.Println("alpha on")

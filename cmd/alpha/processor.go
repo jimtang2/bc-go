@@ -8,138 +8,150 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/jimtang2/bc-go/lib/db"
 	"github.com/jimtang2/bc-go/lib/stream"
 )
 
 type Processor struct {
-	markets map[string]*Market // markets by pair name
-	out     chan ProcessorOutput
-}
-
-type ProcessorOutput interface {
-	Bytes() []byte
-	Key() string
+	alphaChan chan *Alpha
+	pairs     map[string]*PairMarket
+	exchanges map[string]db.Exchange
 }
 
 func NewProcessor() *Processor {
-	return &Processor{
-		out:     make(chan ProcessorOutput),
-		markets: map[string]*Market{},
+	p := &Processor{
+		alphaChan: make(chan *Alpha),
+		pairs:     map[string]*PairMarket{},
+		exchanges: map[string]db.Exchange{},
 	}
+	for _, e := range db.Exchanges() {
+		p.exchanges[e.ID] = e
+	}
+	return p
 }
 
 func (p *Processor) Process(m *sarama.ConsumerMessage) {
-	var t stream.Ticker
-	if err := json.Unmarshal(m.Value, &t); err != nil {
+	var ticker stream.Ticker
+	if err := json.Unmarshal(m.Value, &ticker); err != nil {
 		log.Println(err)
+		return
 	}
-	pair := t.Pair
-	if _, ok := p.markets[pair]; !ok {
-		p.markets[pair] = &Market{
-			mu:   sync.Mutex{},
-			Pair: pair,
+	if _, ok := p.pairs[ticker.Pair]; !ok {
+		p.pairs[ticker.Pair] = &PairMarket{
+			mu:        sync.Mutex{},
+			name:      ticker.Pair,
+			exchanges: p.exchanges,
 		}
 	}
-	market := p.markets[pair]
-	if market.LowestAsk == nil || t.Ask < market.LowestAsk.Ask {
-		market.SetLowestAsk(&t)
+	pair := p.pairs[ticker.Pair]
+	if pair.lowestAsk == nil || ticker.Ask < pair.lowestAsk.Ask {
+		pair.setLowestAsk(&ticker)
 	}
-	if market.HighestBid == nil || t.Bid > market.HighestBid.Bid {
-		market.SetHighestBid(&t)
+	if pair.highestBid == nil || ticker.Bid > pair.highestBid.Bid {
+		pair.setHighestBid(&ticker)
 	}
-	if a := market.Seek(); a != nil {
-		p.out <- a
+	// find alpha
+	if a := pair.spreadCalc(); a != nil {
+		p.alphaChan <- a
 	}
 }
 
-type Market struct {
+type PairMarket struct {
 	mu         sync.Mutex
-	Pair       string
-	LowestAsk  *stream.Ticker
-	HighestBid *stream.Ticker
+	exchanges  map[string]db.Exchange
+	name       string
+	lowestAsk  *stream.Ticker
+	highestBid *stream.Ticker
 }
 
-func (m *Market) SetLowestAsk(t *stream.Ticker) {
-	m.mu.Lock()
-	m.LowestAsk = t
-	m.mu.Unlock()
-	go m.Void(t, 1*time.Second)
-}
-
-func (m *Market) SetHighestBid(t *stream.Ticker) {
-	m.mu.Lock()
-	m.HighestBid = t
-	m.mu.Unlock()
-	go m.Void(t, 1*time.Second)
-}
-
-func (m *Market) Void(t *stream.Ticker, d time.Duration) {
-	time.Sleep(d)
-	if m.LowestAsk == t {
-		m.mu.Lock()
-		m.LowestAsk = nil
-		m.mu.Unlock()
-	}
-	if m.HighestBid == t {
-		m.mu.Lock()
-		m.HighestBid = nil
-		m.mu.Unlock()
-	}
-}
-
-func (m *Market) Seek() *Alpha {
-	m.mu.Lock()
-	if m.LowestAsk == nil || m.HighestBid == nil || m.LowestAsk.Exchange == m.HighestBid.Exchange {
-		m.mu.Unlock()
+func (p *PairMarket) spreadCalc() *Alpha {
+	p.mu.Lock()
+	if p.lowestAsk == nil || p.highestBid == nil || p.lowestAsk.Exchange == p.highestBid.Exchange {
+		p.mu.Unlock()
 		return nil
 	}
 	var (
-		lo         = *m.LowestAsk
-		hi         = *m.HighestBid
-		spread     = hi.Bid - lo.Ask
-		spreadPct  = spread / lo.Ask * 100
-		spreadSize = 0.0
-		spreadVal  = spreadSize * spread
+		lo  = *p.lowestAsk
+		hi  = *p.highestBid
+		vol = 0.0
 	)
-	m.mu.Unlock()
+	p.mu.Unlock()
 	if hi.BidSize < lo.AskSize {
-		spreadSize = hi.BidSize
+		vol = hi.BidSize
 	} else {
-		spreadSize = lo.AskSize
+		vol = lo.AskSize
 	}
-	if spreadPct <= 0.01 {
+	// filter negative bid - ask prices
+	if hi.Bid-lo.Ask <= 0 {
 		return nil
 	}
-	log.Printf("%10s  %v-%v  +%.2f%%  +%.2f$  %.2f  %.2f  [%.2f  %.2f  %.2f  %.2f]",
-		m.Pair,
-		hi.Exchange[:3],
-		lo.Exchange[:3],
-		spreadPct,
-		spreadVal,
-		spread,
-		spreadSize,
-		hi.Bid,
-		lo.Ask,
-		hi.BidSize,
-		lo.AskSize,
-	)
-	return &Alpha{
-		Ask:         lo,
-		Bid:         hi,
-		Pair:        m.Pair,
-		Spread:      spread,
-		SpreadRatio: spread / lo.Ask,
-		SpreadSize:  spreadSize,
+	return (&Alpha{
+		AskExchange: lo.Exchange,
+		AskPrice:    lo.Ask,
+		AskSize:     lo.AskSize,
+		AskFee:      p.exchanges[lo.Exchange].TakerFee,
+		AskTime:     lo.EventTime,
+		BidExchange: hi.Exchange,
+		BidPrice:    hi.Bid,
+		BidSize:     hi.BidSize,
+		BidFee:      p.exchanges[hi.Exchange].TakerFee,
+		BidTime:     hi.EventTime,
+		Pair:        p.name,
+		Spread:      hi.Bid - lo.Ask,
+		Volume:      vol,
+		Timestamp:   time.Now().UnixMilli(),
+	}).profitCalc()
+}
+
+func (m *PairMarket) setLowestAsk(ticker *stream.Ticker) {
+	m.mu.Lock()
+	m.lowestAsk = ticker
+	m.mu.Unlock()
+	go m.void(ticker, 1*time.Second)
+}
+
+func (m *PairMarket) setHighestBid(ticker *stream.Ticker) {
+	m.mu.Lock()
+	m.highestBid = ticker
+	m.mu.Unlock()
+	go m.void(ticker, 1*time.Second)
+}
+
+func (m *PairMarket) void(ticker *stream.Ticker, d time.Duration) {
+	time.Sleep(d)
+	if m.lowestAsk == ticker {
+		m.mu.Lock()
+		m.lowestAsk = nil
+		m.mu.Unlock()
+	}
+	if m.highestBid == ticker {
+		m.mu.Lock()
+		m.highestBid = nil
+		m.mu.Unlock()
 	}
 }
 
 type Alpha struct {
-	Ask         stream.Ticker `json:"ask"`
-	Bid         stream.Ticker `json:"bid"`
-	Pair        string        `json:"pair"`
-	Spread      float64       `json:"spread"`
-	SpreadRatio float64       `json:"spread_ratio"`
-	SpreadSize  float64       `json:"spread_size"`
+	Pair        string  `json:"p"`
+	Spread      float64 `json:"s"`
+	Volume      float64 `json:"v"`
+	AskExchange string  `json:"ax"`
+	AskPrice    float64 `json:"ap"`
+	AskSize     float64 `json:"as"`
+	AskFee      float64 `json:"af"`
+	AskTime     int64   `json:"at"`
+	BidExchange string  `json:"bx"`
+	BidPrice    float64 `json:"bp"`
+	BidSize     float64 `json:"bs"`
+	BidFee      float64 `json:"bf"`
+	BidTime     int64   `json:"bt"`
+	Profit      float64 `json:"pl"`
+	Timestamp   int64   `json:"ts"`
+}
+
+func (a *Alpha) profitCalc() *Alpha {
+	a.Profit = a.Volume * (a.BidPrice*(1-a.BidFee) - a.AskPrice*(1+a.AskFee))
+	return a
 }
 
 func (a *Alpha) Bytes() []byte {
@@ -149,9 +161,9 @@ func (a *Alpha) Bytes() []byte {
 
 func (a *Alpha) Key() string {
 	return fmt.Sprintf("%s %v-%v $%.2f",
-		a.Bid.Pair,
-		a.Bid.Exchange[:3],
-		a.Ask.Exchange[:3],
-		a.Spread*a.SpreadSize,
+		a.Pair,
+		a.BidExchange[:3],
+		a.AskExchange[:3],
+		a.Profit,
 	)
 }
