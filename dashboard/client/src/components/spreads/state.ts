@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { w3cwebsocket as WebSocket } from 'websocket';
 import { produce } from "immer";
-import { getAPIHost } from "@/lib/utils";
+import { buildApiUrl } from "@/lib/utils";
 
 export interface Spread {
   i:   number; // offset id
@@ -38,7 +38,7 @@ export const useStore = create<State>((set, get) => {
     if (ws?.readyState === 0 || ws?.readyState === 1) {
       return
     }
-    ws = new WebSocket(`ws://${getAPIHost()}/ws`);
+    ws = new WebSocket(buildApiUrl("/ws", { websocket: true }));
     ws.onopen = () => {
       set(state => ({ ...state, status: 'connected' }));
     };

@@ -5,6 +5,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function getAPIHost() {
-  return process.env.NODE_ENV === 'production' ? document.location.host : 'localhost:8080';
+export function buildApiUrl(path: string, { websocket=false }: { websocket?: boolean; } = {}) {
+  let protocol = location.protocol
+  if (websocket) {
+    protocol = protocol.replace("http", "ws")
+  }
+  let hostname = location.host
+  if (process.env.NODE_ENV !== "production") {
+    hostname = "localhost:8080"
+  }
+  if (path.charAt(0) === "/") {
+    path = path.replace("/", "")
+  }
+  let url = `${protocol}//${hostname}/${path}`
+  return url
 }

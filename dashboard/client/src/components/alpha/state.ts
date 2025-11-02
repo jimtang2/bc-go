@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getAPIHost } from "@/lib/utils";
+import { buildApiUrl } from "@/lib/utils";
 
 export interface Alpha {
   id:   number;  // id
@@ -35,7 +35,7 @@ interface State {
 
 export const useStore = create<State>((set) => {
   async function fetchData() {
-    fetch(`http://${getAPIHost()}/api/alpha`)
+    fetch(buildApiUrl("/api/alpha"))
       .then(resp => resp.json())
       .then(json => set(state => ({ ...state, response: json })))
   }
