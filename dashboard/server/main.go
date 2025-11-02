@@ -34,8 +34,9 @@ func main() {
 	go consume("alpha", sarama.OffsetOldest, NewAlphaProcessor())
 	go func() {
 		http.Handle("/", http.FileServer(http.Dir("dist")))
+		http.Handle("/alpha/", http.StripPrefix("/alpha", http.FileServer(http.Dir("dist"))))
 		http.Handle("/ws", socketHandler)
-		http.Handle("/alpha", &AlphaHandler{mu: sync.Mutex{}})
+		http.Handle("/api/alpha", &AlphaHandler{mu: sync.Mutex{}})
 		log.Println("dashboard listening on", viper.GetString("http.port"))
 		handler := cors.New(cors.Options{
 			AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),

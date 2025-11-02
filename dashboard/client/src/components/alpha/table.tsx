@@ -1,29 +1,16 @@
 import { useState, useEffect } from "react";
-import { useReactTable, getCoreRowModel, getPaginationRowModel, flexRender, type ColumnDef, } from '@tanstack/react-table';
-import { Button } from "@/components/ui/button";
+import { useReactTable, getCoreRowModel, getPaginationRowModel, flexRender, type Table as TTable } from '@tanstack/react-table';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SelectLabel, Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination"
-
-import { ChevronFirst, ChevronLeft, ChevronRight, ChevronLast } from 'lucide-react';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import columnDefs from "./columns"
 import type { Alpha, AlphaResponse } from "./state";
 
 interface AlphaTableProps {
-  response: AlphaResponse;
+  response: AlphaResponse | null;
 };
 
-export default function AlphaTable({ response, }: StreamTableProps): React.FC {
-  const { count, start, end, total } = response?.period || {}
+export default function AlphaTable({ response, }: AlphaTableProps) {
   const [pagination, setPagination] = useState({
     pageIndex: 0,
     pageSize: 24,
@@ -35,14 +22,13 @@ export default function AlphaTable({ response, }: StreamTableProps): React.FC {
     getPaginationRowModel: getPaginationRowModel(),
     onPaginationChange: setPagination,
     state: { pagination },
-    rowCount: count,
     getRowId: (row: Alpha) => row.id.toString(),
   });
   return (
     <div className="mx-2 lg:mx-3 overflow-hidden rounded-lg border">
       <div className="mx-2 my-2 flex flex-row gap-2">
         <PaginationButtons table={table} />
-        <PaginationInfo table={table} response={response} />
+        <PaginationInfo response={response} />
         <PaginationMenu table={table} />
       </div>
       <Table>
@@ -68,37 +54,8 @@ export default function AlphaTable({ response, }: StreamTableProps): React.FC {
   );
 };
 
-function PaginationArrows({ table }) {
-  return (
-    <div className="flex flex-row items-center gap-1">
-      <Button variant="ghost" 
-        onClick={() => table.firstPage()} 
-        disabled={!table.getCanPreviousPage()}>
-        <ChevronFirst className="h-5 w-5" />
-      </Button>
-      <Button variant="ghost" 
-        onClick={() => table.previousPage()} 
-        disabled={!table.getCanPreviousPage()}>
-        <ChevronLeft className="h-5 w-5" />
-      </Button>
-      <Button variant="ghost" 
-        onClick={() => table.nextPage()} 
-        disabled={!table.getCanNextPage()}>
-        <ChevronRight className="h-5 w-5" />
-      </Button>
-      <Button variant="ghost" 
-        onClick={() => table.lastPage()} 
-        disabled={!table.getCanNextPage()}>
-        <ChevronLast className="h-5 w-5" />
-      </Button>
-    </div>
-  );
-};
-
-function PaginationInfo({ table, response }) {
-  const pageCount = table.getPageCount();
-  const rowCount = table.getRowCount();
-  const since = new Date(response?.period.start).toLocaleDateString()
+function PaginationInfo({ response }: { response: AlphaResponse | null; }) {
+  const since = new Date(response?.period.start || 0).toLocaleDateString()
   return (
     <div className="flex flex-row items-center gap-1 text-sm">
       <span>Current Period: {response?.period.total.toFixed(2)}$ (since {since})</span>
@@ -106,13 +63,20 @@ function PaginationInfo({ table, response }) {
   );
 };
 
-export function PaginationButtons({ table }) {
+interface PaginationItemProps {
+  index: number;
+  label: string;
+  onClick: () => void;
+  isActive: boolean;
+  isVisible: boolean;
+}
+
+export function PaginationButtons({ table }: { table: TTable<Alpha>; }) {
   const state = table.getState().pagination
   const pageCount = table.getPageCount();
-  const rowCount = table.getRowCount();
   const maxTabsCount = 7;
-  const { pageIndex, pageSize } = state
-  const [ pageNumbers, setPageNumbers ] = useState([])
+  const { pageIndex } = state
+  const [ pageNumbers, setPageNumbers ] = useState<PaginationItemProps[]>([])
   useEffect(() => {
     const pages = []
     for (let i = 0; i < pageCount; i++) {
@@ -164,13 +128,12 @@ export function PaginationButtons({ table }) {
   )
 }
 
-export function PaginationMenu({ table }) {
-  const pageCount = table.getPageCount();
-  const rowCount = table.getRowCount();
-  const { pageIndex, pageSize } = table.getState()
+export function PaginationMenu({ table }: { table: TTable<Alpha>; }) {
+  const { pageSize: pageSizeNumber } = table.getState().pagination
+  const pageSize = pageSizeNumber.toString()
   return (
     <div className="flex flex-row items-center gap-1">
-      <Select value={table.getState().pagination.pageSize} onValueChange={(val: string) => table.setPageSize(Number(val))}>
+      <Select value={pageSize} onValueChange={(val: string) => table.setPageSize(Number(val))}>
         <SelectTrigger className="w-18">
           <SelectValue placeholder="Display" />
         </SelectTrigger>
@@ -178,7 +141,7 @@ export function PaginationMenu({ table }) {
           <SelectGroup>
             <SelectLabel>Display</SelectLabel>
             {[24, 48, 72, 96].map(pageSize => 
-              <SelectItem key={pageSize} value={pageSize}>{pageSize}</SelectItem>
+              <SelectItem key={pageSize} value={pageSize.toString()}>{pageSize}</SelectItem>
             )}
           </SelectGroup>
         </SelectContent>

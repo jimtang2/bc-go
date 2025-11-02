@@ -1,25 +1,23 @@
-import { useReactTable, getCoreRowModel, flexRender, type ColumnDef, } from '@tanstack/react-table';
+import { useReactTable, getCoreRowModel, flexRender, } from '@tanstack/react-table';
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SelectLabel, Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Pause, Play } from 'lucide-react';
 import columnDefs from "./columns";
 import type { Spread } from "./state";
 
-interface SpreadTableProps {
+export interface SpreadTableProps {
   data: Spread[];
   status: string;
   disconnect: () => void;
   reconnect: () => void;
-  displayCount: number;
-  setDisplayCount: (string) => void;
-  margin: number;
-  setMargin: (string) => void;
-  // latency: string;
+  displayCount: string;
+  setDisplayCount: (val: string) => void;
+  margin: string;
+  setMargin: (val: string) => void;
 };
 
-export default function SpreadTable({ data = [], status = "disconnected", disconnect, reconnect, displayCount, setDisplayCount, margin, setMargin, latency = "0" }: SpreadTableProps): React.FC {
+export default function SpreadTable({ data = [], status = "disconnected", disconnect, reconnect, displayCount, setDisplayCount, margin, setMargin, }: SpreadTableProps) {
   const table = useReactTable({
     data,
     columns: columnDefs,
@@ -34,14 +32,6 @@ export default function SpreadTable({ data = [], status = "disconnected", discon
             <Button variant="ghost" size="icon" onClick={disconnect}><Pause /></Button> : 
             <Button variant="ghost" size="icon" onClick={reconnect}><Play /></Button>
           }
-{/*          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="text-sm">{latency} ms</span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Latency from last received update event time</p>
-            </TooltipContent>
-          </Tooltip>*/}
         </div>
         <div className="flex flex-row items-center gap-2">
            <Select value={margin} onValueChange={(val: string) => setMargin(val)}>
@@ -86,7 +76,7 @@ export default function SpreadTable({ data = [], status = "disconnected", discon
           ))}
         </TableHeader>
         <TableBody className="font-mono">
-          {table.getRowModel().rows.filter((row, i) => i < parseInt(displayCount)).map(row => 
+          {table.getRowModel().rows.filter((_, i) => i < parseInt(displayCount)).map(row => 
             <TableRow key={row.id}>
               {row.getVisibleCells().map((cell) => (
                 <TableCell key={cell.id} style={{ width: `${cell.column.columnDef.size}%` }}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>

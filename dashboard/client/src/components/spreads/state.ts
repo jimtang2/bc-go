@@ -4,6 +4,7 @@ import { produce } from "immer";
 import { getAPIHost } from "@/lib/utils";
 
 export interface Spread {
+  i:   number; // offset id
   p:   string;  // pair
   s:   number;  // spread
   v:   number;  // volume

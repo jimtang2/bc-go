@@ -1,11 +1,11 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarSeparator, SidebarGroup, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
-import { Scale, Blend, ArrowLeftRight, Settings } from 'lucide-react';
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarGroup, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
+import { Scale, Blend, ArrowLeftRight } from 'lucide-react';
 import clsx from "clsx";
 function SidebarMenuButtonLink({to, children}: {to: string; children?: React.ReactNode;}) {
   const { pathname } = useLocation();
-  const className = clsx(["flex flex-row items-center w-full gap-2", pathname === to ? "text-gray-100" : "text-gray-500"])
+  const className = clsx(["flex flex-row items-center w-full gap-2", pathname === to || pathname === to + "/" ? "text-gray-100" : "text-gray-500"])
   return <Link to={to} className={className}>{children}</Link>
 }
 export default () => {
@@ -38,26 +38,11 @@ export default () => {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
-        {/*<SidebarSeparator />
-        <SidebarGroup>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton>
-                <SidebarMenuButtonLink to="/settings">
-                  <Settings className="h-4 w-4" />
-                  <span>Settings</span>
-                </SidebarMenuButtonLink>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>*/}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton>
-              {/*<Github className="mr-2 h-4 w-4" />
-              <span>Github</span>*/}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore, type Spread } from './state';
 import { useDebounce } from "use-debounce";
-import Table from "./table"
+import Table, { type SpreadTableProps } from "./table"
 
-export default () => {
+export default function SpreadsPage() {
   const { spreads, status, connect, reconnect, disconnect } = useStore();
-  const [ data, setData ] = useState(spreads)
+  const [ data, setData ] = useState<Spread[]>(spreads)
   const [ displayCount, setDisplayCount ] = useState("24")
   const [ margin, setMargin ] = useState("0.000")
   const [ latency, setLatency ] = useState(0)
-  const [ throttledData, setThrottledData ] = useDebounce(data, 30)
+  const [ throttledData, _ ] = useDebounce(data, 30)
 
   useEffect(() => {
     connect()
@@ -19,14 +19,14 @@ export default () => {
   useEffect(() => {
     if (spreads.length > 0) {
       const {s, ap, bp} = spreads[0]
-      if (s/(ap+bp)*2*100>=margin) {
+      if (s/(ap+bp)*2*100>=Number(margin)) {
         setData([spreads[0], ...data])  
       }
     } 
   }, [spreads])
   
   useEffect(() => {
-    setData(spreads.filter(({ s, ap, bp }) => s/(ap+bp)*2*100 >= margin))
+    setData(spreads.filter(({ s, ap, bp }) => s/(ap+bp)*2*100 >= Number(margin)))
   }, [margin])
 
   // when window is throttled the data gets backed up and the latency (duration between last received message timestamp and current time) increases; this fix disconnects the websocket connection once the latency reaches 20+ seconds
@@ -47,7 +47,7 @@ export default () => {
     };
   }, [latency]);
 
-  const props = {
+  const props: SpreadTableProps = {
     data: throttledData,
     status,
     disconnect,

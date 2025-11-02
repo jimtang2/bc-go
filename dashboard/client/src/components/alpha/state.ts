@@ -1,10 +1,8 @@
 import { create } from 'zustand';
-import { w3cwebsocket as WebSocket } from 'websocket';
-import { produce } from "immer";
 import { getAPIHost } from "@/lib/utils";
 
 export interface Alpha {
-  i:   number;  // id
+  id:   number;  // id
   p:   string;  // pair
   s:   number;  // spread
   v:   number;  // volume
@@ -31,15 +29,15 @@ export interface AlphaResponse {
 };
 
 interface State {
-  response:   AlphaResponse;
+  response:   AlphaResponse | null;
   fetchData:  () => void;
 };
 
-export const useStore = create<State>((set, get) => {
+export const useStore = create<State>((set) => {
   async function fetchData() {
-    fetch(`http://${getAPIHost()}/alpha`)
+    fetch(`http://${getAPIHost()}/api/alpha`)
       .then(resp => resp.json())
-      .then(json => set({ response: json }))
+      .then(json => set(state => ({ ...state, response: json })))
   }
   
   return { 

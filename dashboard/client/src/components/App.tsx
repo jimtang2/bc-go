@@ -10,7 +10,7 @@ const router = createBrowserRouter([{
   element: <Layout />,
   children: [
     { index: true, element: <SpreadsPage /> },
-    { path: 'alpha', element: <AlphaPage /> },
+    { path: 'alpha', element: <AlphaPage />} ,
     { path: 'settings', element: <SettingsPage /> },
     { path: '*', element: <Navigate to="/" replace /> },
   ],
