@@ -1,4 +1,3 @@
-// webhook$$bc-go;cmd/stream/proxy.go;grok$$
 package main
 
 import (

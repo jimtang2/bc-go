@@ -1,4 +1,3 @@
-# webhook$$bc-go;config/config.yml;grok$$
 kafka:
   brokers: [kafka:9092]
 db:

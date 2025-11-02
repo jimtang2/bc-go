@@ -14,7 +14,6 @@ akhq:
         password: 3f3dca225f994d65c91c905282f3b43531cecae8836324675b50e3d26f36a7ca
         groups: 
         - admin
-
   connections:
     docker-kafka-server:
       properties:

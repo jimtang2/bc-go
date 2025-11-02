@@ -1,4 +1,3 @@
-# webhook$$bc-go;docker/stream.dockerfile;grok$$
 FROM golang:1.25.1-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./

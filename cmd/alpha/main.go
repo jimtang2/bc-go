@@ -1,4 +1,3 @@
-// webhook$$bc-go;cmd/alpha/main.go;grok$$
 package main
 
 import (
