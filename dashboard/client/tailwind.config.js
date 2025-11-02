@@ -1,4 +1,3 @@
-// webhook$$bc-go;dashboard/client/tailwind.config.js;grok$$
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [

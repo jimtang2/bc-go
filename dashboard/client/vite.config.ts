@@ -1,4 +1,3 @@
-// webhook$$bc-go;dashboard/client/vite.config.js;grok$$
 import path from "path"
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'

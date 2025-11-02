@@ -1,3 +1,4 @@
+# compose.yml
 services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -46,20 +47,12 @@ services:
       - traefik-net
     labels:
       - "traefik.enable=true"
-      # HTTP → HTTPS redirect
-      - "traefik.http.routers.akhq-http.rule=Host(`akhq.lab9.studio`)"
-      - "traefik.http.routers.akhq-http.entrypoints=web"
-      - "traefik.http.routers.akhq-http.middlewares=redirect-to-https"
-      # HTTPS route
       - "traefik.http.routers.akhq-https.rule=Host(`akhq.lab9.studio`)"
       - "traefik.http.routers.akhq-https.entrypoints=websecure"
       - "traefik.http.routers.akhq-https.tls=true"
       - "traefik.http.routers.akhq-https.tls.certresolver=letsencrypt"
       - "traefik.http.routers.akhq-https.service=akhq"
-      # Service definition (AKHQ listens on 8080 inside the container)
       - "traefik.http.services.akhq.loadbalancer.server.port=8080"
-      # Re-use the same redirect middleware defined for dashboard
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
 
   postgres:
     image: postgres:17.5-alpine
@@ -119,19 +112,20 @@ services:
       - "8080"
     networks:
       - traefik-net
+    restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard-http.rule=Host(`lab9.studio`)"
-      - "traefik.http.routers.dashboard-http.entrypoints=web"
-      - "traefik.http.routers.dashboard-http.middlewares=redirect-to-https"
-      - "traefik.http.routers.dashboard-https.rule=Host(`lab9.studio`)"
-      - "traefik.http.routers.dashboard-https.entrypoints=websecure"
-      - "traefik.http.routers.dashboard-https.tls=true"
-      - "traefik.http.routers.dashboard-https.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.dashboard-https.service=dashboard"
+      - "traefik.http.routers.app.rule=Host(`lab9.studio`) && !PathPrefix(`/api`)"
+      - "traefik.http.routers.app.entrypoints=websecure"
+      - "traefik.http.routers.app.tls=true"
+      - "traefik.http.routers.app.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.app.service=dashboard"
+      - "traefik.http.routers.api.rule=Host(`lab9.studio`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls=true"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api.service=dashboard"
       - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-    restart: unless-stopped
 
   traefik:
     image: traefik:v3.0
@@ -148,7 +142,7 @@ services:
       - traefik-net
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`lab9.studio`) && (PathPrefix(`/traefik`) || PathPrefix(`/api`))"
+      - "traefik.http.routers.traefik.rule=Host(`lab9.studio`) && PathPrefix(`/traefik`)"
       - "traefik.http.routers.traefik.entrypoints=websecure"
       - "traefik.http.routers.traefik.tls=true"
       - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
