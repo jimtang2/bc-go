@@ -2,7 +2,7 @@ import { useReactTable, getCoreRowModel, flexRender, type ColumnDef, } from '@ta
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SelectLabel, Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+// import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Pause, Play } from 'lucide-react';
 import columnDefs from "./columns";
 import type { Spread } from "./state";
@@ -16,7 +16,7 @@ interface SpreadTableProps {
   setDisplayCount: (string) => void;
   margin: number;
   setMargin: (string) => void;
-  latency: string;
+  // latency: string;
 };
 
 export default function SpreadTable({ data = [], status = "disconnected", disconnect, reconnect, displayCount, setDisplayCount, margin, setMargin, latency = "0" }: SpreadTableProps): React.FC {
@@ -24,7 +24,7 @@ export default function SpreadTable({ data = [], status = "disconnected", discon
     data,
     columns: columnDefs,
     getCoreRowModel: getCoreRowModel(),
-    getRowId: ({ p, ax, bx, ts }: Spread) => `${p}:${ax}-${bx}:${ts}`,
+    getRowId: (row: Spread) => row.i.toString(),
   });
   return (
     <div className="mx-2 lg:mx-3 overflow-hidden rounded-lg border">
@@ -34,30 +34,16 @@ export default function SpreadTable({ data = [], status = "disconnected", discon
             <Button variant="ghost" size="icon" onClick={disconnect}><Pause /></Button> : 
             <Button variant="ghost" size="icon" onClick={reconnect}><Play /></Button>
           }
-          <Tooltip>
+{/*          <Tooltip>
             <TooltipTrigger asChild>
               <span className="text-sm">{latency} ms</span>
             </TooltipTrigger>
             <TooltipContent>
               <p>Latency from last received update event time</p>
             </TooltipContent>
-          </Tooltip>
+          </Tooltip>*/}
         </div>
         <div className="flex flex-row items-center gap-2">
-          <Select value={displayCount} onValueChange={(val: string) => setDisplayCount(val)}>
-            <SelectTrigger className="w-24">
-              <SelectValue placeholder="Display" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Display</SelectLabel>
-                <SelectItem value="25">25</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-                <SelectItem value="75">75</SelectItem>
-                <SelectItem value="100">100</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
            <Select value={margin} onValueChange={(val: string) => setMargin(val)}>
             <SelectTrigger className="w-36">
               <SelectValue placeholder="Margin %" />
@@ -70,6 +56,20 @@ export default function SpreadTable({ data = [], status = "disconnected", discon
                 <SelectItem value="0.050">0.05%</SelectItem>
                 <SelectItem value="0.100">0.10%</SelectItem>
                 <SelectItem value="0.150">0.15%</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Select value={displayCount} onValueChange={(val: string) => setDisplayCount(val)}>
+            <SelectTrigger className="w-18">
+              <SelectValue placeholder="Display" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Display</SelectLabel>
+                <SelectItem value="24">24</SelectItem>
+                <SelectItem value="48">48</SelectItem>
+                <SelectItem value="72">72</SelectItem>
+                <SelectItem value="96">96</SelectItem>
               </SelectGroup>
             </SelectContent>
           </Select>

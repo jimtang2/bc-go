@@ -69,7 +69,7 @@ const columnDefs: ColumnDef<Spread,any>[] = [
   },
   { 
     header: 'Margin %', 
-    accessorFn: ({m, af, bf}) => [m, (af+bf).toFixed(2)],
+    accessorFn: ({s, bp, ap, af, bf}) => [s / (bp + ap) * 2, (af+bf).toFixed(2)],
     size: 7.5, 
     cell: (info) => {
       const [m, f] = info.getValue()

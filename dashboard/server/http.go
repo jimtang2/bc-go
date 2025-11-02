@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"strconv"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/jimtang2/bc-go/lib/db"
@@ -95,24 +95,25 @@ func (socket *SocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type AlphaHandler struct{}
+type AlphaHandler struct {
+	mu        sync.Mutex
+	cache     []byte
+	cacheTime time.Time
+}
 
 func (h *AlphaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var (
-		limit, _  = strconv.Atoi(r.URL.Query().Get("l"))
-		offset, _ = strconv.Atoi(r.URL.Query().Get("o"))
-	)
-	if limit == 0 {
-		limit = 50
+	if time.Now().Sub(h.cacheTime) > 2*time.Second {
+		h.mu.Lock()
+		var err error
+		h.cache, err = db.AlphaItems()
+		h.mu.Unlock()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		h.cacheTime = time.Now()
 	}
-	if offset == 0 {
-		offset = 0
-	}
-	b, err := db.AlphaItems(limit, offset)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(b)
+	w.Write(h.cache)
 }

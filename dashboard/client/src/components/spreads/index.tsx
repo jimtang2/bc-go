@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useStore, type Spread } from './state';
+import { useDebounce } from "use-debounce";
 import Table from "./table"
 
 export default () => {
   const { spreads, status, connect, reconnect, disconnect } = useStore();
   const [ data, setData ] = useState(spreads)
-  const [ displayCount, setDisplayCount ] = useState("25")
+  const [ displayCount, setDisplayCount ] = useState("24")
   const [ margin, setMargin ] = useState("0.000")
-  const [ latency, setLatency ] = useState("0")
+  const [ latency, setLatency ] = useState(0)
+  const [ throttledData, setThrottledData ] = useDebounce(data, 30)
 
   useEffect(() => {
     connect()
@@ -15,26 +17,30 @@ export default () => {
   }, [])
 
   useEffect(() => {
-    if (spreads.length > 0 && spreads[0].m*100>=margin) {
-      setData([spreads[0], ...data])
+    if (spreads.length > 0) {
+      const {s, ap, bp} = spreads[0]
+      if (s/(ap+bp)*2*100>=margin) {
+        setData([spreads[0], ...data])  
+      }
     } 
   }, [spreads])
-
-  useEffect(() => {
-    if (data?.length > 0) {
-      if (data[0].at > 0) {
-        setLatency((Date.now() - data[0].at).toString());
-      } else if (data[0].bt > 0) {
-        setLatency((Date.now() - data[0].bt).toString());
-      };
-    };
-  }, [data]);
   
   useEffect(() => {
-    setData(spreads.filter(({ m }) => m*100 >= margin))
+    setData(spreads.filter(({ s, ap, bp }) => s/(ap+bp)*2*100 >= margin))
   }, [margin])
 
   // when window is throttled the data gets backed up and the latency (duration between last received message timestamp and current time) increases; this fix disconnects the websocket connection once the latency reaches 20+ seconds
+  useEffect(() => {
+    if (data?.length == 0) {
+      return
+    };
+    if (data[0].at > 0) {
+      setLatency(Date.now() - data[0].at);
+    } else if (data[0].bt > 0) {
+      setLatency(Date.now() - data[0].bt);
+    };
+  }, [data]);
+
   useEffect(() => {
     if (latency > 20000) {
       disconnect();
@@ -42,7 +48,7 @@ export default () => {
   }, [latency]);
 
   const props = {
-    data,
+    data: throttledData,
     status,
     disconnect,
     reconnect,
@@ -50,7 +56,7 @@ export default () => {
     setDisplayCount,
     margin,
     setMargin,
-    latency,
+    // latency,
   }
 
   return <Table {...props} />

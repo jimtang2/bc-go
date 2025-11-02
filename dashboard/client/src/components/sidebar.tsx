@@ -38,7 +38,7 @@ export default () => {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
-        <SidebarSeparator />
+        {/*<SidebarSeparator />
         <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -50,7 +50,7 @@ export default () => {
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
-        </SidebarGroup>
+        </SidebarGroup>*/}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/IBM/sarama"
 	"github.com/jimtang2/bc-go/lib/db"
@@ -22,8 +24,10 @@ func NewSpreadsProcessor(channel chan []byte) *SpreadsProcessor {
 	}
 }
 
+// SpreadsProcessor Process to insert offset id to payload for frontend table row key
 func (p *SpreadsProcessor) Process(m *sarama.ConsumerMessage) error {
-	p.channel <- m.Value
+	b := bytes.Replace(m.Value, []byte("{"), []byte(fmt.Sprintf(`{"i":%v,`, m.Offset)), 1)
+	p.channel <- b
 	return nil
 }
 
@@ -39,5 +43,6 @@ func (p *AlphaProcessor) Process(m *sarama.ConsumerMessage) error {
 	if err := json.Unmarshal(m.Value, &v); err != nil {
 		return err
 	}
+	v.ID = m.Offset
 	return db.InsertAlpha(v)
 }

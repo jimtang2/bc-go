@@ -3,22 +3,11 @@ import { w3cwebsocket as WebSocket } from 'websocket';
 import { produce } from "immer";
 import { getAPIHost } from "@/lib/utils";
 
-export interface Ticker {
-  x:   string;  // exchange
-  p:   string;  // pair
-  b:   number;  // bid
-  bs:  number;  // bid size
-  a:   number;  // ask 
-  as:  number;  // ask size
-  et:  number;  // event time
-};
-
 export interface Alpha {
   i:   number;  // id
   p:   string;  // pair
   s:   number;  // spread
-  sr:  number;  // spread ratio
-  ss:  number;  // spread size
+  v:   number;  // volume
   ax:  string;  // ask exchange
   bx:  string;  // bid exchange
   ap:  number;  // ask price
@@ -32,68 +21,29 @@ export interface Alpha {
   pl:  number;  // p/l
 };
 
+export interface AlphaResponse {
+  items: Alpha[];
+  period: {
+    count: number;
+    start: number;
+    total: number;
+  };
+};
+
 interface State {
-  alpha:       Alpha[];
-  bufferSize:  number;
-  status:      'connected' | 'disconnected';
-  connect:     () => void;
-  reconnect:   () => void;
-  disconnect:  () => void;
+  response:   AlphaResponse;
+  fetchData:  () => void;
 };
 
 export const useStore = create<State>((set, get) => {
-  let ws: WebSocket | null = null;
-  function connect() {
-    if (ws?.readyState === 0 || ws?.readyState === 1) {
-      return
-    }
-    ws = new WebSocket(`ws://${getAPIHost()}/ws`);
-    ws.onopen = () => {
-      set(state => ({ ...state, status: 'connected' }));
-    };
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data.toString())
-        set(produce((draft: State) => {
-          draft.alpha.unshift(message);
-          if (draft.alpha.length > get().bufferSize) {
-            draft.alpha.pop()
-          }
-        }));
-      } catch (e) {
-        console.error('WebSocket message parse error:', e);
-      }
-    };
-    ws.onclose = () => {
-      set(state => ({ ...state, status: 'disconnected' }));
-    };
-    // ws.onerror = (error) => {
-    //   console.log('ws.onerror:', error)
-    // };
-  };
-  async function reconnect() {
-    try {
-      ws?.close();
-      connect();
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      if (get().status !== 'connected') {
-        set(state => ({ ...state, status: 'disconnected' }));
-      }
-    } catch (error) {
-      console.error('Reconnect failed:', error);
-      set(state => ({ ...state, status: 'disconnected' }));
-    }
-  };
-  async function disconnect() {
-    ws?.close();
-    set(state => ({ ...state, status: 'disconnected' }));
-  };
+  async function fetchData() {
+    fetch(`http://${getAPIHost()}/alpha`)
+      .then(resp => resp.json())
+      .then(json => set({ response: json }))
+  }
+  
   return { 
-    alpha: [],
-    bufferSize: 1000,
-    status: 'disconnected',
-    connect,
-    reconnect,
-    disconnect,
+    response: null,
+    fetchData: fetchData,
   };
 });

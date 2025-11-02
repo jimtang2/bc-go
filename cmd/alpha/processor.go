@@ -150,7 +150,13 @@ type Alpha struct {
 }
 
 func (a *Alpha) profitCalc() *Alpha {
-	a.Profit = a.Volume * (a.BidPrice*(1-a.BidFee) - a.AskPrice*(1+a.AskFee))
+	var (
+		v1 = a.Volume * a.BidPrice
+		v2 = a.Volume * a.AskPrice
+		v3 = (a.Volume * a.BidPrice) * a.BidFee / 100
+		v4 = (a.Volume * a.AskPrice) * a.AskFee / 100
+	)
+	a.Profit = v1 - v2 - v3 - v4
 	return a
 }
 
@@ -160,7 +166,7 @@ func (a *Alpha) Bytes() []byte {
 }
 
 func (a *Alpha) Key() string {
-	return fmt.Sprintf("%s %v-%v $%.2f",
+	return fmt.Sprintf("%s %v-%v %.2f$",
 		a.Pair,
 		a.BidExchange[:3],
 		a.AskExchange[:3],

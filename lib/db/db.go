@@ -110,42 +110,9 @@ type AlphaResponse struct {
 	} `json:"period"`
 }
 
-func AlphaItems(limit, offset int) ([]byte, error) {
+func AlphaItems() ([]byte, error) {
 	b := []byte{}
-	err := db().QueryRow(`SELECT 
-    json_build_object(
-        'items', COALESCE(json_agg(row_to_json(t)), '[]'),
-        'limit', $1,
-        'offset', $2,
-        'period', (
-            SELECT json_build_object(
-                'count', COUNT(*),
-                'start', MIN(timestamp),
-                'end', MAX(timestamp),
-                'total', COALESCE(SUM(profit), 0.0)
-            )
-            FROM alpha
-        )
-    ) AS response
-FROM (
-    SELECT
-        id,
-        ask_exchange,
-        ask_price,
-        ask_size,
-        ask_time,
-        bid_exchange,
-        bid_price,
-        bid_size,
-        bid_time,
-        pair,
-        spread,
-        volume,
-        profit,
-        timestamp
-    FROM alpha
-    ORDER BY timestamp DESC
-    LIMIT $1 OFFSET $2
-) t;`, limit, offset).Scan(&b)
+	err := db().QueryRow(`select json_build_object('items', coalesce(json_agg(row_to_json(t)), '[]'), 'period', (select json_build_object('count', count(*), 'start', min(timestamp), 'end', max(timestamp), 'total', coalesce(sum(profit), 0.0)) from alpha)
+    ) as response from (select id as id, ask_exchange as ax, ask_price as ap, ask_size as as, ask_fee as af, ask_time as at, bid_exchange as bx, bid_price as bp, bid_size as bs, bid_fee as bf, bid_time as bt, pair as p, spread as s, volume as v, profit as pl, timestamp as ts from alpha order by timestamp desc) t;`).Scan(&b)
 	return b, err
 }

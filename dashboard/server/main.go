@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/IBM/sarama"
@@ -34,7 +35,7 @@ func main() {
 	go func() {
 		http.Handle("/", http.FileServer(http.Dir("dist")))
 		http.Handle("/ws", socketHandler)
-		http.Handle("/alpha", &AlphaHandler{})
+		http.Handle("/alpha", &AlphaHandler{mu: sync.Mutex{}})
 		log.Println("dashboard listening on", viper.GetString("http.port"))
 		handler := cors.New(cors.Options{
 			AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),

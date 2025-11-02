@@ -1,62 +1,49 @@
-import { useReactTable, getCoreRowModel, flexRender, type ColumnDef, } from '@tanstack/react-table';
+import { useState, useEffect } from "react";
+import { useReactTable, getCoreRowModel, getPaginationRowModel, flexRender, type ColumnDef, } from '@tanstack/react-table';
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SelectLabel, Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
+
+import { ChevronFirst, ChevronLeft, ChevronRight, ChevronLast } from 'lucide-react';
 import columnDefs from "./columns"
+import type { Alpha, AlphaResponse } from "./state";
 
 interface AlphaTableProps {
-  data: Alpha[];
-  status: string;
-  disconnect: () => void;
-  reconnect: () => void;
-  displayCount: number;
-  setDisplayCount: (string) => void;
-  minSpread: number;
-  setMinSpread: (string) => void;
+  response: AlphaResponse;
 };
 
-export default function AlphaTable({ data = [], status = "disconnected", disconnect, reconnect, displayCount, setDisplayCount, minSpread, setMinSpread }: StreamTableProps): React.FC {
+export default function AlphaTable({ response, }: StreamTableProps): React.FC {
+  const { count, start, end, total } = response?.period || {}
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 24,
+  });
   const table = useReactTable({
-    data,
+    data: response?.items || [],
     columns: columnDefs,
     getCoreRowModel: getCoreRowModel(),
-    getRowId: (row: Alpha) => row.i.toString(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onPaginationChange: setPagination,
+    state: { pagination },
+    rowCount: count,
+    getRowId: (row: Alpha) => row.id.toString(),
   });
   return (
     <div className="mx-2 lg:mx-3 overflow-hidden rounded-lg border">
       <div className="mx-2 my-2 flex flex-row gap-2">
-        <div className="flex-grow-1"></div>
-        <div className="flex flex-row items-center gap-2">          
-          <Select value={displayCount} onValueChange={(val: string) => setDisplayCount(val)}>
-            <SelectTrigger className="w-24">
-              <SelectValue placeholder="Display" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Display</SelectLabel>
-                <SelectItem value="25">25</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-                <SelectItem value="75">75</SelectItem>
-                <SelectItem value="100">100</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-           <Select value={minSpread} onValueChange={(val: string) => setMinSpread(val)}>
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder="Minimum Spread %" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Minimum Spread %</SelectLabel>
-                <SelectItem value="0.000">No minimum</SelectItem>
-                <SelectItem value="0.025">0.025%</SelectItem>
-                <SelectItem value="0.050">0.05%</SelectItem>
-                <SelectItem value="0.100">0.10%</SelectItem>
-                <SelectItem value="0.150">0.15%</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
+        <PaginationButtons table={table} />
+        <PaginationInfo table={table} response={response} />
+        <PaginationMenu table={table} />
       </div>
       <Table>
         <TableHeader className="bg-muted">
@@ -69,7 +56,7 @@ export default function AlphaTable({ data = [], status = "disconnected", disconn
           ))}
         </TableHeader>
         <TableBody className="font-mono">
-          {table.getRowModel().rows.filter((row, i) => i < parseInt(displayCount)).map(row => 
+          {table.getRowModel().rows.map(row => 
             <TableRow key={row.id}>
               {row.getVisibleCells().map((cell) => (
                 <TableCell key={cell.id} style={{ width: `${cell.column.columnDef.size}%` }}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
@@ -80,3 +67,123 @@ export default function AlphaTable({ data = [], status = "disconnected", disconn
     </div>
   );
 };
+
+function PaginationArrows({ table }) {
+  return (
+    <div className="flex flex-row items-center gap-1">
+      <Button variant="ghost" 
+        onClick={() => table.firstPage()} 
+        disabled={!table.getCanPreviousPage()}>
+        <ChevronFirst className="h-5 w-5" />
+      </Button>
+      <Button variant="ghost" 
+        onClick={() => table.previousPage()} 
+        disabled={!table.getCanPreviousPage()}>
+        <ChevronLeft className="h-5 w-5" />
+      </Button>
+      <Button variant="ghost" 
+        onClick={() => table.nextPage()} 
+        disabled={!table.getCanNextPage()}>
+        <ChevronRight className="h-5 w-5" />
+      </Button>
+      <Button variant="ghost" 
+        onClick={() => table.lastPage()} 
+        disabled={!table.getCanNextPage()}>
+        <ChevronLast className="h-5 w-5" />
+      </Button>
+    </div>
+  );
+};
+
+function PaginationInfo({ table, response }) {
+  const pageCount = table.getPageCount();
+  const rowCount = table.getRowCount();
+  const since = new Date(response?.period.start).toLocaleDateString()
+  return (
+    <div className="flex flex-row items-center gap-1 text-sm">
+      <span>Current Period: {response?.period.total.toFixed(2)}$ (since {since})</span>
+    </div>
+  );
+};
+
+export function PaginationButtons({ table }) {
+  const state = table.getState().pagination
+  const pageCount = table.getPageCount();
+  const rowCount = table.getRowCount();
+  const maxTabsCount = 7;
+  const { pageIndex, pageSize } = state
+  const [ pageNumbers, setPageNumbers ] = useState([])
+  useEffect(() => {
+    const pages = []
+    for (let i = 0; i < pageCount; i++) {
+      pages.push({ 
+        index: i,
+        label: (i+1).toString(),
+        onClick: () => table.setPageIndex(i),
+        isActive: i == pageIndex,
+        isVisible: i == pageIndex,
+      })
+    }
+    const visibleCount = pageCount > maxTabsCount ? maxTabsCount : pageCount;
+    let i = -1
+    while (true) {
+      if (pages[pageIndex+i]) {
+        pages[pageIndex+i].isVisible = true;
+      }
+      i = i < 0 ? i * (-1) : i * (-1) -1
+      if (pages.filter(({isVisible}) => isVisible).length >= visibleCount) {
+        break;
+      }
+    }
+    setPageNumbers(pages)
+  }, [state])
+
+  return (
+    <div className="flex flex-row flex-grow-1 items-center gap-1">
+      <Pagination>
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious isActive={table.getCanPreviousPage()}
+              onClick={() => table.getCanPreviousPage() && table.previousPage()} />
+          </PaginationItem>
+
+          {pageNumbers?.filter(({ isVisible}) => isVisible).map(({index, label, onClick, isActive}) => 
+              <PaginationItem key={index}>
+                <PaginationLink 
+                  onClick={onClick} 
+                  isActive={isActive}>{label}</PaginationLink>
+              </PaginationItem>
+          )}
+          <PaginationItem>
+            <PaginationNext isActive={table.getCanNextPage()}
+              onClick={() => table.getCanNextPage() && table.nextPage()} />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </div>
+  )
+}
+
+export function PaginationMenu({ table }) {
+  const pageCount = table.getPageCount();
+  const rowCount = table.getRowCount();
+  const { pageIndex, pageSize } = table.getState()
+  return (
+    <div className="flex flex-row items-center gap-1">
+      <Select value={table.getState().pagination.pageSize} onValueChange={(val: string) => table.setPageSize(Number(val))}>
+        <SelectTrigger className="w-18">
+          <SelectValue placeholder="Display" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectLabel>Display</SelectLabel>
+            {[24, 48, 72, 96].map(pageSize => 
+              <SelectItem key={pageSize} value={pageSize}>{pageSize}</SelectItem>
+            )}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
+
+  )
+}

@@ -23,7 +23,7 @@ export interface Spread {
 };
 
 interface State {
-  spreads:       Spread[];
+  spreads:     Spread[];
   bufferSize:  number;
   status:      'connected' | 'disconnected';
   connect:     () => void;
@@ -44,7 +44,6 @@ export const useStore = create<State>((set, get) => {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data.toString())
-        message.m = message.s / ((message.bp + message.ap)/2)
         set(produce((draft: State) => {
           draft.spreads.unshift(message);
           if (draft.spreads.length > get().bufferSize) {
