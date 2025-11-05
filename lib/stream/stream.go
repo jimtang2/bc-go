@@ -44,7 +44,6 @@ func Open(driverName string, driverConfig DriverConfig) {
 		return
 	}
 	go func() {
-		defer driver.Close()
 		for {
 			messageType, b, err := ws.ReadMessage()
 			if err != nil {
