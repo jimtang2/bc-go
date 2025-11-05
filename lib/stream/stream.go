@@ -1,91 +1,63 @@
 package stream
 
 import (
-	"encoding/json"
 	"log"
-	"strings"
-	"time"
+
+	"github.com/gorilla/websocket"
+	"github.com/jimtang2/bc-go/lib/kafka"
 )
 
-type Message struct {
-	Topic   string
-	Key     string
-	Headers map[string]string
-	Payload []byte
+type Driver interface {
+	Open(args []string) (*websocket.Conn, error)                          // open ws connection, handshake, etc
+	Close() error                                                         // clean up ws connection, etc
+	OnWebsocketMessage(messageType int, b []byte) (kafka.KMessage, error) // parse websocket message and return KMessage; returned error triggers DriverConfig.OnError so drivers implementation should only return non-nil error when absolutely necessary
 }
 
-const (
-	SIGNAL_EXIT = iota
-	SIGNAL_START
-	SIGNAL_RESTART
-)
-
-type Stream interface {
-	Start()               // called by Proxy.Stream()
-	Output() chan Message // called by Proxy.Stream()
-	Name() string         // called by stream.Start()
-	Signal() chan int     // called by stream.Start()
-	Connect() error       // called by stream.Start()
-	Listen()              // called by stream.Start()
-	Close()               // called by stream.Start()
+type DriverConfig struct {
+	Args       []string                          // passed to Driver.Open(args []string)
+	OnKMessage func(kafka.KMessage)              // do stuff with stream payload here
+	OnError    func(Driver, DriverConfig, error) // handle stream error here
 }
 
-func start(s Stream) {
-	for {
-		switch <-s.Signal() {
-		case SIGNAL_EXIT:
-			s.Close()
-			log.Printf("[%v] connection closed (0)", s.Name())
-			return
-		case SIGNAL_START:
-			if err := s.Connect(); err != nil {
-				log.Printf("[%v] %v", s.Name(), err)
+var drivers map[string]Driver
+
+// drivers must call this to register themselves
+func Register(name string, driver Driver) {
+	if drivers == nil {
+		drivers = map[string]Driver{}
+	}
+	if _, ok := drivers[name]; ok {
+		log.Fatalf("driver %v cannot be re-registered", name)
+	}
+	drivers[name] = driver
+}
+
+// starts the stream driver with specified name and config
+func Open(driverName string, driverConfig DriverConfig) {
+	driver, ok := drivers[driverName]
+	if !ok {
+		log.Fatalf("driver %v is not registered")
+	}
+	ws, err := driver.Open(driverConfig.Args)
+	if err != nil {
+		driverConfig.OnError(driver, driverConfig, err)
+		return
+	}
+	go func() {
+		for {
+			messageType, b, err := ws.ReadMessage()
+			if err != nil {
+				log.Printf("[%v] parse error: %v", driverName, err)
+				driverConfig.OnError(driver, driverConfig, err)
 				return
 			}
-			go s.Listen()
-		case SIGNAL_RESTART:
-			s.Close()
-			time.Sleep(2 * time.Second)
-			if err := s.Connect(); err != nil {
-				log.Printf("[%v] %v", s.Name(), err)
-				return
+			kmessage, err := driver.OnWebsocketMessage(messageType, b)
+			if err != nil {
+				log.Printf("[%v] parse error: %v", driverName, err)
+				driverConfig.OnError(driver, driverConfig, err)
+			} else if kmessage != nil {
+				driverConfig.OnKMessage(kmessage)
 			}
-			go s.Listen()
-		default:
 		}
-	}
-}
-
-// ticker is the normalized struct for use in topic 'tickers'
-type Ticker struct {
-	Exchange  string  `json:"x"`
-	Pair      string  `json:"p"`
-	Bid       float64 `json:"b"`
-	BidSize   float64 `json:"bs"`
-	Ask       float64 `json:"a"`
-	AskSize   float64 `json:"as"`
-	EventTime int64   `json:"et"` // unix time ms
-}
-
-func (t *Ticker) Fmt() (*Ticker, bool) {
-	t.Pair = strings.ReplaceAll(t.Pair, "/", "")
-	t.Pair = strings.ReplaceAll(t.Pair, "-", "")
-	t.Pair = strings.ReplaceAll(t.Pair, ":", "")
-	if i := strings.Index(t.Pair, "USD"); i > -1 {
-		t.Pair = t.Pair[:i] + ":" + t.Pair[i:]
-	}
-	return t, t.Valid()
-}
-
-func (t *Ticker) Valid() bool {
-	return len(t.Pair) > 0 && len(t.Exchange) > 0 && t.Bid > 0 && t.Ask > 0
-}
-
-func (t *Ticker) Key() string {
-	return t.Exchange + ":" + t.Pair
-}
-
-func (t *Ticker) Bytes() []byte {
-	b, _ := json.Marshal(t)
-	return b
+	}()
 }

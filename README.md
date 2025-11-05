@@ -1,23 +1,29 @@
 # Arbitrage
 
-## Get Started
+## Description
 
-```bash
-git clone https://github.com/jimtang2/bc-go.git
-cd bc-go && docker compose up
+```
+git clone https://github.com/jimtang2/bc-go.git 
+cd bc-go && docker compose up 
 ```
 
-This starts: 
-- `bc-stream`: multiple streams of crypto pairs tickers from several CEX's (at this time, Binance, OKX, Kraken, Coinbase, Bitfinex)
-- `bc-alpha`: stream processor to compute spread across exchanges
-- `bc-dashboard`: visualization dashboard  
+Visit `http://localhost:9000`
 
-## Development Notes
+## System Components
 
-- tracked pairs are set in postgres (table `pairs`); refer to deploy/config/config.yml for connection details 
-- new streams can be added by implementing `github.com/jimtang2/bc-go/lib/stream#Stream` interface and editing `cmd/stream/proxy.go`
-- vite dev mode leaks memory 
+1. Kafka
+2. Postgres
+3. AKHQ dashboard (optional)
+4. bc_stream
+5. bc_dashboard
 
-## Next
+## Basic Structure
 
-- wallet connector
+| Process             |                                               |
+| ------------------- | --------------------------------------------- |
+| 1. Kafka            |                                               |
+| 2. Postgres         |                                               |
+| 3. AKHQ             |                                               |
+| 4. bc_stream        | `cmd/stream`                                  |
+| 5. bc_dashboard     | `cmd/dashboard`, `client`                     |
+
