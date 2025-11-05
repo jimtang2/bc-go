@@ -5,7 +5,6 @@ logs
 *.local
 
 # Repository
-data
 tmp
 dist
 .air.toml

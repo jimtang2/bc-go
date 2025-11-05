@@ -9,18 +9,17 @@ import (
 
 	"github.com/IBM/sarama"
 	"github.com/jimtang2/bc-go/lib/db"
-	"github.com/jimtang2/bc-go/lib/stream"
+	"github.com/jimtang2/bc-go/lib/kafka"
+	"github.com/jimtang2/bc-go/lib/stream/driver"
 )
 
-type Processor struct {
-	alphaChan chan *Alpha
+type TickersProcessor struct {
 	pairs     map[string]*PairMarket
 	exchanges map[string]db.Exchange
 }
 
-func NewProcessor() *Processor {
-	p := &Processor{
-		alphaChan: make(chan *Alpha),
+func NewTickersProcessor() *TickersProcessor {
+	p := &TickersProcessor{
 		pairs:     map[string]*PairMarket{},
 		exchanges: map[string]db.Exchange{},
 	}
@@ -30,11 +29,11 @@ func NewProcessor() *Processor {
 	return p
 }
 
-func (p *Processor) Process(m *sarama.ConsumerMessage) {
-	var ticker stream.Ticker
+func (p *TickersProcessor) Process(m *sarama.ConsumerMessage) kafka.KMessage {
+	var ticker driver.TickerMessage
 	if err := json.Unmarshal(m.Value, &ticker); err != nil {
 		log.Println(err)
-		return
+		return nil
 	}
 	if _, ok := p.pairs[ticker.Pair]; !ok {
 		p.pairs[ticker.Pair] = &PairMarket{
@@ -50,18 +49,15 @@ func (p *Processor) Process(m *sarama.ConsumerMessage) {
 	if pair.highestBid == nil || ticker.Bid > pair.highestBid.Bid {
 		pair.setHighestBid(&ticker)
 	}
-	// find alpha
-	if a := pair.spreadCalc(); a != nil {
-		p.alphaChan <- a
-	}
+	return pair.spreadCalc()
 }
 
 type PairMarket struct {
 	mu         sync.Mutex
 	exchanges  map[string]db.Exchange
 	name       string
-	lowestAsk  *stream.Ticker
-	highestBid *stream.Ticker
+	lowestAsk  *driver.TickerMessage // lowest price A will sell
+	highestBid *driver.TickerMessage // highest price A will buy
 }
 
 func (p *PairMarket) spreadCalc() *Alpha {
@@ -103,21 +99,21 @@ func (p *PairMarket) spreadCalc() *Alpha {
 	}).profitCalc()
 }
 
-func (m *PairMarket) setLowestAsk(ticker *stream.Ticker) {
+func (m *PairMarket) setLowestAsk(ticker *driver.TickerMessage) {
 	m.mu.Lock()
 	m.lowestAsk = ticker
 	m.mu.Unlock()
-	go m.void(ticker, 1*time.Second)
+	go m.setExpire(ticker, 1*time.Second)
 }
 
-func (m *PairMarket) setHighestBid(ticker *stream.Ticker) {
+func (m *PairMarket) setHighestBid(ticker *driver.TickerMessage) {
 	m.mu.Lock()
 	m.highestBid = ticker
 	m.mu.Unlock()
-	go m.void(ticker, 1*time.Second)
+	go m.setExpire(ticker, 1*time.Second)
 }
 
-func (m *PairMarket) void(ticker *stream.Ticker, d time.Duration) {
+func (m *PairMarket) setExpire(ticker *driver.TickerMessage, d time.Duration) {
 	time.Sleep(d)
 	if m.lowestAsk == ticker {
 		m.mu.Lock()
@@ -172,4 +168,8 @@ func (a *Alpha) Key() string {
 		a.AskExchange[:3],
 		a.Profit,
 	)
+}
+
+func (a *Alpha) IsValid() bool {
+	return a != nil
 }

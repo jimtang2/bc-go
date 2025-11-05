@@ -1,4 +1,4 @@
-package stream
+package driver
 
 import (
 	"encoding/json"
@@ -6,107 +6,58 @@ import (
 	"strconv"
 
 	"github.com/gorilla/websocket"
-	"github.com/jimtang2/bc-go/lib/db"
+	"github.com/jimtang2/bc-go/lib/kafka"
+	"github.com/jimtang2/bc-go/lib/stream"
 )
 
-type OKXStream struct {
-	out    chan Message
-	signal chan int
-	socket *websocket.Conn
+func init() {
+	stream.Register("okx-tickers", &OKXTickers{})
 }
 
-func NewOKXStream() *OKXStream {
-	return &OKXStream{
-		out:    make(chan Message),
-		signal: make(chan int),
+type OKXTickers struct {
+	ws *websocket.Conn
+}
+
+func (s *OKXTickers) Close() error {
+	if s.ws != nil {
+		return s.ws.Close()
+	} else {
+		return nil
 	}
 }
 
-func (s *OKXStream) Output() chan Message {
-	return s.out
-}
-
-func (s *OKXStream) Start() {
-	go start(s)
-	s.signal <- 1
-}
-
-func (s *OKXStream) Name() string {
-	return "okx"
-}
-
-func (s *OKXStream) Signal() chan int {
-	return s.signal
-}
-
-func (s *OKXStream) Connect() error {
-	return s.connect()
-}
-
-func (s *OKXStream) Listen() {
-	s.listen()
-}
-
-func (s *OKXStream) Close() {
-	if s.socket != nil {
-		s.socket.Close()
-	}
-}
-
-func (s *OKXStream) connect() error {
-	var err error
-	s.socket, _, err = websocket.DefaultDialer.Dial("wss://ws.okx.com:8443/ws/v5/public", nil)
+func (s *OKXTickers) Open(pairs []string) (*websocket.Conn, error) {
+	ws, _, err := websocket.DefaultDialer.Dial("wss://ws.okx.com:8443/ws/v5/public", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	m := struct {
-		Op   string        `json:"op"`
-		Args []interface{} `json:"args"`
-	}{}
-	m.Op = "subscribe"
 	args := []interface{}{}
-	for _, pair := range db.TrackedPairs("okx") {
+	for _, pair := range pairs {
 		args = append(args, map[string]interface{}{
 			"channel":  "tickers",
 			"instId":   pair,
 			"instType": "SPOT",
 		})
 	}
-	m.Args = args
-	return s.socket.WriteJSON(m)
-}
-
-func (s *OKXStream) listen() {
-	for {
-		_, b, err := s.socket.ReadMessage()
-		if err != nil {
-			log.Println("[okx]", err)
-			break
-		}
-		go s.send(b)
+	m := map[string]interface{}{
+		"op":   "subscribe",
+		"args": interface{}(args),
 	}
-	s.signal <- 2
+	return ws, ws.WriteJSON(m)
 }
 
-func (s *OKXStream) send(b []byte, args ...interface{}) {
+func (s *OKXTickers) OnWebsocketMessage(messageType int, b []byte) (kafka.KMessage, error) {
 	v := OKXTicker{}
 	if err := json.Unmarshal(b, &v); err != nil {
 		log.Println("[okx]", err)
-		return
+		return nil, nil
 	}
 	if v.Event == "subscribe" {
-		return
+		return nil, nil
 	} else if v.Arg.Channel == "tickers" {
-		t, ok := v.Ticker().Fmt()
-		if !ok {
-			return
-		}
-		s.out <- Message{
-			Topic:   "tickers",
-			Key:     t.Key(),
-			Payload: t.Bytes(),
-		}
+		return v.TickerMessage(), nil
 	}
+	return nil, nil
 }
 
 type OKXTicker struct {
@@ -138,8 +89,8 @@ type OKXTicker struct {
 	} `json:"data"`
 }
 
-func (v *OKXTicker) Ticker() *Ticker {
-	t := Ticker{
+func (v *OKXTicker) TickerMessage() *TickerMessage {
+	t := &TickerMessage{
 		Exchange: "okx",
 	}
 	t.Pair = v.Arg.InstID
@@ -148,7 +99,8 @@ func (v *OKXTicker) Ticker() *Ticker {
 	t.Ask, _ = strconv.ParseFloat(v.Data[0].AskPx, 64)
 	t.AskSize, _ = strconv.ParseFloat(v.Data[0].AskSz, 64)
 	t.EventTime, _ = strconv.ParseInt(v.Data[0].Ts, 10, 64)
-	return &t
+	t.Fmt()
+	return t
 }
 
 // OKX requires subscription in JSON format with op: "subscribe"

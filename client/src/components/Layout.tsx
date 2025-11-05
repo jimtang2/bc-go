@@ -71,7 +71,7 @@ function AppSidebar() {
             {sidebarLinks.map(({to, label, icon}) => {
               const className = clsx(["flex flex-row items-center w-full gap-2", pathname === to || pathname === to + "/" ? "text-gray-100" : "text-gray-500"])
               return (
-                <SidebarMenuItem>
+                <SidebarMenuItem key={to}>
                   <SidebarMenuButton>
                     <Link to={to} className={className}>
                       {icon}<span>{label}</span>

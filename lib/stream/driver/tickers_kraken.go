@@ -1,102 +1,51 @@
-package stream
+package driver
 
 import (
 	"encoding/json"
-	"log"
 
 	"github.com/gorilla/websocket"
-	"github.com/jimtang2/bc-go/lib/db"
+	"github.com/jimtang2/bc-go/lib/kafka"
+	"github.com/jimtang2/bc-go/lib/stream"
 )
 
-type KrakenStream struct {
-	out    chan Message
-	signal chan int
-	socket *websocket.Conn
+func init() {
+	stream.Register("kraken-tickers", &KrakenTickers{})
 }
 
-func NewKrakenStream() *KrakenStream {
-	return &KrakenStream{
-		out:    make(chan Message),
-		signal: make(chan int),
-	}
+type KrakenTickers struct {
+	ws *websocket.Conn
 }
 
-func (s *KrakenStream) Output() chan Message {
-	return s.out
-}
-
-func (s *KrakenStream) Start() {
-	go start(s)
-	s.signal <- 1
-}
-
-func (s *KrakenStream) Name() string {
-	return "kraken"
-}
-
-func (s *KrakenStream) Signal() chan int {
-	return s.signal
-}
-
-func (s *KrakenStream) Connect() error {
-	return s.connect()
-}
-
-func (s *KrakenStream) Listen() {
-	s.listen()
-}
-
-func (s *KrakenStream) Close() {
-	if s.socket != nil {
-		s.socket.Close()
-	}
-}
-
-func (s *KrakenStream) connect() error {
-	var err error
-	s.socket, _, err = websocket.DefaultDialer.Dial("wss://ws.kraken.com/v2", nil)
-	m := struct {
-		Method string `json:"method"`
-		Params struct {
-			Channel string   `json:"channel"`
-			Symbol  []string `json:"symbol"`
-		} `json:"params"`
-	}{}
+func (s *KrakenTickers) Open(pairs []string) (*websocket.Conn, error) {
+	ws, _, err := websocket.DefaultDialer.Dial("wss://ws.kraken.com/v2", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	m.Method = "subscribe"
-	m.Params.Channel = "ticker"
-	m.Params.Symbol = db.TrackedPairs("kraken")
-	return s.socket.WriteJSON(m)
+	m := map[string]interface{}{
+		"method": "subscribe",
+		"params": interface{}(map[string]interface{}{
+			"channel": "ticker",
+			"symbol":  pairs,
+		}),
+	}
+	err = ws.WriteJSON(m)
+	return ws, err
 }
 
-func (s *KrakenStream) listen() {
-	for {
-		_, b, err := s.socket.ReadMessage()
-		if err != nil {
-			log.Println("[kraken]", err)
-			break
-		}
-		go s.send(b)
+func (s *KrakenTickers) Close() error {
+	if s.ws != nil {
+		return s.ws.Close()
+	} else {
+		return nil
 	}
-	s.signal <- 2
 }
 
-func (s *KrakenStream) send(b []byte, args ...interface{}) {
+func (s *KrakenTickers) OnWebsocketMessage(messageType int, b []byte) (kafka.KMessage, error) {
 	v := KrakenTicker{}
 	if err := json.Unmarshal(b, &v); err != nil {
-		return
+		return nil, nil
 	}
-	t, ok := v.Ticker().Fmt()
-	if !ok {
-		return
-	}
-	s.out <- Message{
-		Topic:   "tickers",
-		Key:     t.Key(),
-		Payload: t.Bytes(),
-	}
+	return v.TickerMessage(), nil
 }
 
 type KrakenTicker struct {
@@ -118,18 +67,19 @@ type KrakenTicker struct {
 	} `json:"data"`
 }
 
-func (v *KrakenTicker) Ticker() *Ticker {
-	t := &Ticker{
+func (v *KrakenTicker) TickerMessage() *TickerMessage {
+	t := &TickerMessage{
 		Exchange: "kraken",
 	}
 	if len(v.Data) < 1 {
-		return t
+		return nil
 	}
 	t.Pair = v.Data[0].Symbol
 	t.Bid = v.Data[0].Bid
 	t.BidSize = v.Data[0].BidSize
 	t.Ask = v.Data[0].Ask
 	t.AskSize = v.Data[0].AskSize
+	t.Fmt()
 	return t
 }
 

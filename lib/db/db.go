@@ -27,7 +27,7 @@ func db() *sql.DB {
 	return conn
 }
 
-func TrackedPairsAll() (pairs map[string][]string, err error) {
+func GetTrackedPairs() (pairs map[string][]string, err error) {
 	var b []byte
 	err = db().QueryRow(`select jsonb_object_agg(exchange, names) from (select exchange, array_to_json(array_agg(name)) as names from pairs group by exchange) sub`).Scan(&b)
 	if err != nil {
@@ -113,6 +113,6 @@ type AlphaResponse struct {
 func AlphaItems() ([]byte, error) {
 	b := []byte{}
 	err := db().QueryRow(`select json_build_object('items', coalesce(json_agg(row_to_json(t)), '[]'), 'period', (select json_build_object('count', count(*), 'start', min(timestamp), 'end', max(timestamp), 'total', coalesce(sum(profit), 0.0)) from alpha)
-    ) as response from (select id as id, ask_exchange as ax, ask_price as ap, ask_size as as, ask_fee as af, ask_time as at, bid_exchange as bx, bid_price as bp, bid_size as bs, bid_fee as bf, bid_time as bt, pair as p, spread as s, volume as v, profit as pl, timestamp as ts from alpha order by timestamp desc) t;`).Scan(&b)
+    ) as response from (select id as id, ask_exchange as ax, ask_price as ap, ask_size as as, ask_fee as af, ask_time as at, bid_exchange as bx, bid_price as bp, bid_size as bs, bid_fee as bf, bid_time as bt, pair as p, spread as s, volume as v, profit as pl, timestamp as ts from alpha where profit > 0.01 order by timestamp desc) t;`).Scan(&b)
 	return b, err
 }

@@ -1,4 +1,4 @@
-package stream
+package driver
 
 import (
 	"encoding/json"
@@ -8,95 +8,54 @@ import (
 	"strings"
 
 	"github.com/gorilla/websocket"
-	"github.com/jimtang2/bc-go/lib/db"
+	"github.com/jimtang2/bc-go/lib/kafka"
+	"github.com/jimtang2/bc-go/lib/stream"
 )
 
-type BinanceStream struct {
-	out    chan Message
-	signal chan int
-	socket *websocket.Conn
+func init() {
+	stream.Register("binance-tickers", &BinanceTickers{})
 }
 
-func NewBinanceStream() *BinanceStream {
-	return &BinanceStream{
-		out:    make(chan Message),
-		signal: make(chan int),
+type BinanceTickers struct {
+	ws *websocket.Conn
+}
+
+func (s *BinanceTickers) Open(pairs []string) (*websocket.Conn, error) {
+	ws, _, err := websocket.DefaultDialer.Dial(
+		fmt.Sprintf(
+			"wss://stream.binance.com:9443/stream?streams=%s@ticker",
+			strings.Join(pairs, "@ticker/"),
+		),
+		nil,
+	)
+	s.ws = ws
+	return ws, err
+}
+
+func (s *BinanceTickers) Close() error {
+	if s.ws == nil {
+		return nil
+	} else {
+		return s.ws.Close()
 	}
 }
 
-func (s *BinanceStream) Output() chan Message {
-	return s.out
-}
-
-func (s *BinanceStream) Start() {
-	go start(s)
-	s.signal <- 1
-}
-
-func (s *BinanceStream) Name() string {
-	return "binance"
-}
-
-func (s *BinanceStream) Signal() chan int {
-	return s.signal
-}
-
-func (s *BinanceStream) Connect() error {
-	return s.connect()
-}
-
-func (s *BinanceStream) Listen() {
-	s.listen()
-}
-
-func (s *BinanceStream) Close() {
-	if s.socket != nil {
-		s.socket.Close()
-	}
-}
-
-func (s *BinanceStream) connect() error {
-	var err error
-	s.socket, _, err = websocket.DefaultDialer.Dial(fmt.Sprintf("wss://stream.binance.com:9443/stream?streams=%s@ticker", strings.Join(db.TrackedPairs("binance"), "@ticker/")), nil)
-	return err
-}
-
-func (s *BinanceStream) listen() {
-	for {
-		messageType, b, err := s.socket.ReadMessage()
+func (s *BinanceTickers) OnWebsocketMessage(messageType int, b []byte) (kafka.KMessage, error) {
+	if messageType == websocket.PingMessage {
+		err := s.ws.WriteMessage(websocket.PongMessage, b)
 		if err != nil {
 			log.Println("[binance]", err)
-			break
+			return nil, err
 		}
-		switch messageType {
-		case websocket.PingMessage:
-			err = s.socket.WriteMessage(websocket.PongMessage, b)
-			if err != nil {
-				log.Println("[binance]", err)
-				break
-			}
-		case websocket.TextMessage:
-			go s.send(b)
-		default:
+	} else if messageType == websocket.TextMessage {
+		v := &BinanceTicker{}
+		if err := json.Unmarshal(b, v); err != nil {
+			log.Println(err)
+			return nil, nil
 		}
+		return v.TickerMessage(), nil
 	}
-	s.signal <- 2
-}
-
-func (s *BinanceStream) send(b []byte, args ...interface{}) {
-	v := &BinanceTicker{}
-	if err := json.Unmarshal(b, v); err != nil {
-		return
-	}
-	t, ok := v.Ticker().Fmt()
-	if !ok {
-		return
-	}
-	s.out <- Message{
-		Topic:   "tickers",
-		Key:     t.Key(),
-		Payload: t.Bytes(),
-	}
+	return nil, nil
 }
 
 type BinanceTicker struct {
@@ -128,8 +87,8 @@ type BinanceTicker struct {
 	} `json:"data"`
 }
 
-func (v *BinanceTicker) Ticker() *Ticker {
-	t := Ticker{}
+func (v *BinanceTicker) TickerMessage() *TickerMessage {
+	t := &TickerMessage{}
 	t.Exchange = "binance"
 	t.Pair = v.Data.Symbol
 	t.Bid, _ = strconv.ParseFloat(v.Data.BestBidPrice, 64)
@@ -137,7 +96,8 @@ func (v *BinanceTicker) Ticker() *Ticker {
 	t.Ask, _ = strconv.ParseFloat(v.Data.BestAskPrice, 64)
 	t.AskSize, _ = strconv.ParseFloat(v.Data.BestAskQuantity, 64)
 	t.EventTime = v.Data.EventTime
-	return &t
+	t.Fmt()
+	return t
 }
 
 // BinanceTicker defines a detailed quote structure for centralized exchanges, including standard market data (https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#individual-symbol-ticker-streams)
