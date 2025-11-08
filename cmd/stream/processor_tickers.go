@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -10,166 +9,121 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/jimtang2/bc-go/lib/db"
 	"github.com/jimtang2/bc-go/lib/kafka"
-	"github.com/jimtang2/bc-go/lib/stream/driver"
+	"github.com/jimtang2/bc-go/pkg/pb/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 type TickersProcessor struct {
-	pairs     map[string]*PairMarket
-	exchanges map[string]db.Exchange
+	highestBids sync.Map // string → *pb.Ticker
+	lowestAsks  sync.Map // string → *pb.Ticker
+	fees        map[string]float64
 }
 
 func NewTickersProcessor() *TickersProcessor {
-	p := &TickersProcessor{
-		pairs:     map[string]*PairMarket{},
-		exchanges: map[string]db.Exchange{},
+	proc := &TickersProcessor{
+		fees: db.ExchangeFees(),
 	}
-	for _, e := range db.Exchanges() {
-		p.exchanges[e.ID] = e
-	}
-	return p
+	return proc
 }
 
-func (p *TickersProcessor) Process(m *sarama.ConsumerMessage) kafka.KMessage {
-	var ticker driver.TickerMessage
-	if err := json.Unmarshal(m.Value, &ticker); err != nil {
+func (proc *TickersProcessor) Process(m *sarama.ConsumerMessage) kafka.KMessage {
+	var ticker pb.Ticker
+	if err := proto.Unmarshal(m.Value, &ticker); err != nil {
 		log.Println(err)
 		return nil
 	}
-	if _, ok := p.pairs[ticker.Pair]; !ok {
-		p.pairs[ticker.Pair] = &PairMarket{
-			mu:        sync.Mutex{},
-			name:      ticker.Pair,
-			exchanges: p.exchanges,
-		}
+	if lo, loaded := proc.lowestAsks.LoadOrStore(ticker.Pair, &ticker); !loaded {
+		// new ticker stored
+	} else if ticker.Ask <= lo.(*pb.Ticker).Ask {
+		// new ticker compare with loaded ticker
+		proc.lowestAsks.Store(ticker.Pair, &ticker)
 	}
-	pair := p.pairs[ticker.Pair]
-	if pair.lowestAsk == nil || ticker.Ask < pair.lowestAsk.Ask {
-		pair.setLowestAsk(&ticker)
+	if hi, loaded := proc.highestBids.LoadOrStore(ticker.Pair, &ticker); !loaded {
+		// new ticker stored
+	} else if ticker.Bid >= hi.(*pb.Ticker).Bid {
+		// new ticker compare with loaded ticker
+		proc.highestBids.Store(ticker.Pair, &ticker)
 	}
-	if pair.highestBid == nil || ticker.Bid > pair.highestBid.Bid {
-		pair.setHighestBid(&ticker)
-	}
-	return pair.spreadCalc()
-}
-
-type PairMarket struct {
-	mu         sync.Mutex
-	exchanges  map[string]db.Exchange
-	name       string
-	lowestAsk  *driver.TickerMessage // lowest price A will sell
-	highestBid *driver.TickerMessage // highest price A will buy
-}
-
-func (p *PairMarket) spreadCalc() *Alpha {
-	p.mu.Lock()
-	if p.lowestAsk == nil || p.highestBid == nil || p.lowestAsk.Exchange == p.highestBid.Exchange {
-		p.mu.Unlock()
+	go proc.expireTicker(&ticker)
+	if match := proc.findMatch(ticker.Pair); match == nil {
 		return nil
-	}
-	var (
-		lo  = *p.lowestAsk
-		hi  = *p.highestBid
-		vol = 0.0
-	)
-	p.mu.Unlock()
-	if hi.BidSize < lo.AskSize {
-		vol = hi.BidSize
 	} else {
-		vol = lo.AskSize
+		return &Match{match}
 	}
-	// filter negative bid - ask prices
-	if hi.Bid-lo.Ask <= 0 {
+}
+
+func (proc *TickersProcessor) findMatch(pair string) *pb.Match {
+	loI, loOk := proc.lowestAsks.Load(pair)
+	hiI, hiOk := proc.highestBids.Load(pair)
+	if !loOk || !hiOk {
 		return nil
 	}
-	return (&Alpha{
+	lo := loI.(*pb.Ticker)
+	hi := hiI.(*pb.Ticker)
+	if lo == hi {
+		return nil
+	}
+	m := &pb.Match{
+		Pair:        pair,
 		AskExchange: lo.Exchange,
 		AskPrice:    lo.Ask,
 		AskSize:     lo.AskSize,
-		AskFee:      p.exchanges[lo.Exchange].TakerFee,
 		AskTime:     lo.EventTime,
+		AskFeeRate:  proc.fees[lo.Exchange],
 		BidExchange: hi.Exchange,
 		BidPrice:    hi.Bid,
 		BidSize:     hi.BidSize,
-		BidFee:      p.exchanges[hi.Exchange].TakerFee,
 		BidTime:     hi.EventTime,
-		Pair:        p.name,
-		Spread:      hi.Bid - lo.Ask,
-		Volume:      vol,
+		BidFeeRate:  proc.fees[hi.Exchange],
 		Timestamp:   time.Now().UnixMilli(),
-	}).profitCalc()
-}
-
-func (m *PairMarket) setLowestAsk(ticker *driver.TickerMessage) {
-	m.mu.Lock()
-	m.lowestAsk = ticker
-	m.mu.Unlock()
-	go m.setExpire(ticker, 1*time.Second)
-}
-
-func (m *PairMarket) setHighestBid(ticker *driver.TickerMessage) {
-	m.mu.Lock()
-	m.highestBid = ticker
-	m.mu.Unlock()
-	go m.setExpire(ticker, 1*time.Second)
-}
-
-func (m *PairMarket) setExpire(ticker *driver.TickerMessage, d time.Duration) {
-	time.Sleep(d)
-	if m.lowestAsk == ticker {
-		m.mu.Lock()
-		m.lowestAsk = nil
-		m.mu.Unlock()
 	}
-	if m.highestBid == ticker {
-		m.mu.Lock()
-		m.highestBid = nil
-		m.mu.Unlock()
+	c := &pb.Calculations{}
+	c.Volume = func(a, b float64) float64 {
+		if a <= b {
+			return a
+		} else {
+			return b
+		}
+	}(hi.BidSize, lo.BidSize)
+	c.PriceDiff = hi.Bid - lo.Ask
+	c.PriceAvg = (hi.Bid + lo.Ask) / 2
+	c.Spread = c.PriceDiff * c.Volume
+	c.SpreadPct = c.PriceDiff / c.PriceAvg
+	c.BidFee = m.BidFeeRate * hi.Bid * c.Volume
+	c.AskFee = m.AskFeeRate * lo.Ask * c.Volume
+	c.ProfitLoss = c.Spread - c.BidFee - c.AskFee
+	m.Calculations = c
+	return m
+}
+
+func (proc *TickersProcessor) expireTicker(t *pb.Ticker) {
+	time.Sleep(1 * time.Second)
+	if lo, loaded := proc.lowestAsks.Load(t.Pair); loaded && lo == t {
+		proc.lowestAsks.Delete(t.Pair)
+	}
+	if hi, loaded := proc.highestBids.Load(t.Pair); loaded && hi == t {
+		proc.highestBids.Delete(t.Pair)
 	}
 }
 
-type Alpha struct {
-	Pair        string  `json:"p"`
-	Spread      float64 `json:"s"`
-	Volume      float64 `json:"v"`
-	AskExchange string  `json:"ax"`
-	AskPrice    float64 `json:"ap"`
-	AskSize     float64 `json:"as"`
-	AskFee      float64 `json:"af"`
-	AskTime     int64   `json:"at"`
-	BidExchange string  `json:"bx"`
-	BidPrice    float64 `json:"bp"`
-	BidSize     float64 `json:"bs"`
-	BidFee      float64 `json:"bf"`
-	BidTime     int64   `json:"bt"`
-	Profit      float64 `json:"pl"`
-	Timestamp   int64   `json:"ts"`
+type Match struct {
+	*pb.Match
 }
 
-func (a *Alpha) profitCalc() *Alpha {
-	var (
-		v1 = a.Volume * a.BidPrice
-		v2 = a.Volume * a.AskPrice
-		v3 = (a.Volume * a.BidPrice) * a.BidFee / 100
-		v4 = (a.Volume * a.AskPrice) * a.AskFee / 100
-	)
-	a.Profit = v1 - v2 - v3 - v4
-	return a
+func (m *Match) IsValid() bool {
+	return m.Match != nil
 }
 
-func (a *Alpha) Bytes() []byte {
-	b, _ := json.Marshal(a)
-	return b
-}
-
-func (a *Alpha) Key() string {
+func (m *Match) Key() string {
 	return fmt.Sprintf("%s %v-%v %.2f$",
-		a.Pair,
-		a.BidExchange[:3],
-		a.AskExchange[:3],
-		a.Profit,
+		m.Match.Pair,
+		m.Match.AskExchange[:3],
+		m.Match.BidExchange[:3],
+		m.Match.Calculations.ProfitLoss,
 	)
 }
 
-func (a *Alpha) IsValid() bool {
-	return a != nil
+func (m *Match) Bytes() []byte {
+	b, _ := proto.Marshal(m.Match)
+	return b
 }

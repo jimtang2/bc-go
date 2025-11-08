@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jimtang2/bc-go/lib/kafka"
 	"github.com/jimtang2/bc-go/lib/stream"
+	"github.com/jimtang2/bc-go/pkg/pb/v1"
 )
 
 func init() {
@@ -53,7 +54,7 @@ func (s *BinanceTickers) OnWebsocketMessage(messageType int, b []byte) (kafka.KM
 			log.Println(err)
 			return nil, nil
 		}
-		return v.TickerMessage(), nil
+		return v.Ticker(), nil
 	}
 	return nil, nil
 }
@@ -87,15 +88,18 @@ type BinanceTicker struct {
 	} `json:"data"`
 }
 
-func (v *BinanceTicker) TickerMessage() *TickerMessage {
-	t := &TickerMessage{}
-	t.Exchange = "binance"
-	t.Pair = v.Data.Symbol
-	t.Bid, _ = strconv.ParseFloat(v.Data.BestBidPrice, 64)
-	t.BidSize, _ = strconv.ParseFloat(v.Data.BestBidQuantity, 64)
-	t.Ask, _ = strconv.ParseFloat(v.Data.BestAskPrice, 64)
-	t.AskSize, _ = strconv.ParseFloat(v.Data.BestAskQuantity, 64)
-	t.EventTime = v.Data.EventTime
+func (v *BinanceTicker) Ticker() *Ticker {
+	t := &Ticker{
+		Ticker: &pb.Ticker{
+			Exchange: "binance",
+			Pair:     v.Data.Symbol,
+		},
+	}
+	t.Ticker.Bid, _ = strconv.ParseFloat(v.Data.BestBidPrice, 64)
+	t.Ticker.BidSize, _ = strconv.ParseFloat(v.Data.BestBidQuantity, 64)
+	t.Ticker.Ask, _ = strconv.ParseFloat(v.Data.BestAskPrice, 64)
+	t.Ticker.AskSize, _ = strconv.ParseFloat(v.Data.BestAskQuantity, 64)
+	t.Ticker.EventTime = v.Data.EventTime
 	t.Fmt()
 	return t
 }

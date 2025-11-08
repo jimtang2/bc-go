@@ -11,7 +11,7 @@ export function buildApiUrl(path: string, { websocket=false }: { websocket?: boo
     protocol = protocol.replace("http", "ws")
   }
   let hostname = location.host
-  if (process.env.NODE_ENV !== "production") {
+  if (import.meta.env.MODE !== "production") {
     hostname = "localhost:8080"
   }
   if (path.charAt(0) === "/") {

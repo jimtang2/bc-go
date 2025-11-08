@@ -4,25 +4,25 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { SelectLabel, Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import columnDefs from "./columns"
-import type { Alpha, AlphaResponse } from "./state";
+import { Match, ProfitableMatchesResponse } from "@/gen/v1/schema";
 
-interface AlphaTableProps {
-  response: AlphaResponse | null;
+interface ProfitableMatchesTableProps {
+  response: ProfitableMatchesResponse | null;
 };
 
-export default function AlphaTable({ response, }: AlphaTableProps) {
+export default function ProfitableMatchesTable({ response, }: ProfitableMatchesTableProps) {
   const [pagination, setPagination] = useState({
     pageIndex: 0,
     pageSize: 24,
   });
   const table = useReactTable({
-    data: response?.items || [],
+    data: response?.matches || [],
     columns: columnDefs,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onPaginationChange: setPagination,
     state: { pagination },
-    getRowId: (row: Alpha) => row.id.toString(),
+    getRowId: (row: Match) => row.id.toString(),
   });
   return (
     <div className="mx-2 lg:mx-3 overflow-hidden rounded-lg border">
@@ -54,11 +54,11 @@ export default function AlphaTable({ response, }: AlphaTableProps) {
   );
 };
 
-function PaginationInfo({ response }: { response: AlphaResponse | null; }) {
-  const since = new Date(response?.period.start || 0).toLocaleDateString()
+function PaginationInfo({ response }: { response: ProfitableMatchesResponse | null; }) {
+  const since = new Date(Number(response?.periodStart || 0)).toLocaleDateString()
   return (
     <div className="flex flex-row items-center gap-1 text-sm">
-      <span>Current Period: {response?.period.total.toFixed(2)}$ (since {since})</span>
+      <span>Current Period: {response?.periodProfit.toFixed(2)}$ (since {since})</span>
     </div>
   );
 };
@@ -71,7 +71,7 @@ interface PaginationItemProps {
   isVisible: boolean;
 }
 
-export function PaginationButtons({ table }: { table: TTable<Alpha>; }) {
+export function PaginationButtons({ table }: { table: TTable<Match>; }) {
   const state = table.getState().pagination
   const pageCount = table.getPageCount();
   const maxTabsCount = 7;
@@ -128,7 +128,7 @@ export function PaginationButtons({ table }: { table: TTable<Alpha>; }) {
   )
 }
 
-export function PaginationMenu({ table }: { table: TTable<Alpha>; }) {
+export function PaginationMenu({ table }: { table: TTable<Match>; }) {
   const { pageSize: pageSizeNumber } = table.getState().pagination
   const pageSize = pageSizeNumber.toString()
   return (

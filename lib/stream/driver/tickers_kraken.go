@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jimtang2/bc-go/lib/kafka"
 	"github.com/jimtang2/bc-go/lib/stream"
+	"github.com/jimtang2/bc-go/pkg/pb/v1"
 )
 
 func init() {
@@ -45,7 +46,7 @@ func (s *KrakenTickers) OnWebsocketMessage(messageType int, b []byte) (kafka.KMe
 	if err := json.Unmarshal(b, &v); err != nil {
 		return nil, nil
 	}
-	return v.TickerMessage(), nil
+	return v.Ticker(), nil
 }
 
 type KrakenTicker struct {
@@ -67,18 +68,20 @@ type KrakenTicker struct {
 	} `json:"data"`
 }
 
-func (v *KrakenTicker) TickerMessage() *TickerMessage {
-	t := &TickerMessage{
-		Exchange: "kraken",
-	}
+func (v *KrakenTicker) Ticker() *Ticker {
 	if len(v.Data) < 1 {
 		return nil
 	}
-	t.Pair = v.Data[0].Symbol
-	t.Bid = v.Data[0].Bid
-	t.BidSize = v.Data[0].BidSize
-	t.Ask = v.Data[0].Ask
-	t.AskSize = v.Data[0].AskSize
+	t := &Ticker{
+		Ticker: &pb.Ticker{
+			Exchange: "kraken",
+			Pair:     v.Data[0].Symbol,
+			Bid:      v.Data[0].Bid,
+			BidSize:  v.Data[0].BidSize,
+			Ask:      v.Data[0].Ask,
+			AskSize:  v.Data[0].AskSize,
+		},
+	}
 	t.Fmt()
 	return t
 }

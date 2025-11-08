@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jimtang2/bc-go/lib/kafka"
 	"github.com/jimtang2/bc-go/lib/stream"
+	"github.com/jimtang2/bc-go/pkg/pb/v1"
 )
 
 func init() {
@@ -55,7 +56,7 @@ func (s *OKXTickers) OnWebsocketMessage(messageType int, b []byte) (kafka.KMessa
 	if v.Event == "subscribe" {
 		return nil, nil
 	} else if v.Arg.Channel == "tickers" {
-		return v.TickerMessage(), nil
+		return v.Ticker(), nil
 	}
 	return nil, nil
 }
@@ -89,16 +90,18 @@ type OKXTicker struct {
 	} `json:"data"`
 }
 
-func (v *OKXTicker) TickerMessage() *TickerMessage {
-	t := &TickerMessage{
-		Exchange: "okx",
+func (v *OKXTicker) Ticker() *Ticker {
+	t := &Ticker{
+		Ticker: &pb.Ticker{
+			Exchange: "okx",
+			Pair:     v.Arg.InstID,
+		},
 	}
-	t.Pair = v.Arg.InstID
-	t.Bid, _ = strconv.ParseFloat(v.Data[0].BidPx, 64)
-	t.BidSize, _ = strconv.ParseFloat(v.Data[0].BidSz, 64)
-	t.Ask, _ = strconv.ParseFloat(v.Data[0].AskPx, 64)
-	t.AskSize, _ = strconv.ParseFloat(v.Data[0].AskSz, 64)
-	t.EventTime, _ = strconv.ParseInt(v.Data[0].Ts, 10, 64)
+	t.Ticker.Bid, _ = strconv.ParseFloat(v.Data[0].BidPx, 64)
+	t.Ticker.BidSize, _ = strconv.ParseFloat(v.Data[0].BidSz, 64)
+	t.Ticker.Ask, _ = strconv.ParseFloat(v.Data[0].AskPx, 64)
+	t.Ticker.AskSize, _ = strconv.ParseFloat(v.Data[0].AskSz, 64)
+	t.Ticker.EventTime, _ = strconv.ParseInt(v.Data[0].Ts, 10, 64)
 	t.Fmt()
 	return t
 }

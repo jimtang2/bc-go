@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jimtang2/bc-go/lib/kafka"
 	"github.com/jimtang2/bc-go/lib/stream"
+	"github.com/jimtang2/bc-go/pkg/pb/v1"
 )
 
 func init() {
@@ -84,11 +85,9 @@ func (s *BitfinexTickers) OnWebsocketMessage(messageType int, b []byte) (kafka.K
 				Volume:              data[7].(float64),
 				High:                data[8].(float64),
 				Low:                 data[9].(float64),
+				channels:            s.channels,
 			}
-			t := vv.TickerMessage()
-			t.Pair = s.channels[int(chanID)]
-			t.Fmt()
-			return t, nil
+			return vv.Ticker(), nil
 		} else if b[0] == '{' {
 			v := BitfinexSubscribeAck{}
 			if err := json.Unmarshal(b, &v); err != nil {
@@ -134,17 +133,22 @@ type BitfinexTicker struct {
 	Volume              float64
 	High                float64
 	Low                 float64
+	channels            map[int]string
 }
 
-func (v *BitfinexTicker) TickerMessage() *TickerMessage {
-	t := TickerMessage{
-		Exchange: "bitfinex",
+func (v *BitfinexTicker) Ticker() *Ticker {
+	t := &Ticker{
+		Ticker: &pb.Ticker{
+			Exchange: "bitfinex",
+			Bid:      v.Bid,
+			BidSize:  v.BidSize,
+			Ask:      v.Ask,
+			AskSize:  v.AskSize,
+			Pair:     v.channels[v.ChanID],
+		},
 	}
-	t.Bid = v.Bid
-	t.BidSize = v.BidSize
-	t.Ask = v.Ask
-	t.AskSize = v.AskSize
-	return &t
+	t.Fmt()
+	return t
 }
 
 // https://docs.bitfinex.com/docs/ws-public

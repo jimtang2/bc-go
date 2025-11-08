@@ -10,11 +10,22 @@ import (
 	"github.com/jimtang2/bc-go/lib/db"
 	"github.com/jimtang2/bc-go/lib/kafka"
 	"github.com/jimtang2/bc-go/lib/stream"
+	"github.com/jimtang2/bc-go/lib/stream/driver"
 	_ "github.com/jimtang2/bc-go/lib/stream/driver"
 )
 
+var (
+	restartInterval = 3 * time.Second
+	drivers         = []string{
+		"binance-tickers",
+		"bitfinex-tickers",
+		"coinbase-tickers",
+		"kraken-tickers",
+		"okx-tickers",
+	}
+)
+
 func main() {
-	log.SetFlags(log.Ltime | log.Lshortfile)
 	config.Read()
 	pairsByExchange, err := db.GetTrackedPairs()
 	if err != nil {
@@ -24,22 +35,20 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	drivers := []string{
-		"binance-tickers",
-		"bitfinex-tickers",
-		"coinbase-tickers",
-		"kraken-tickers",
-		"okx-tickers",
-	}
+	topics := []string{"stream_tickers", "stream_alpha", "stream_matches"}
 	go func() {
+		log.Printf("[stream -> %v] on", topics[0])
 		for _, driverName := range drivers {
 			driverConfig := stream.DriverConfig{
 				Args: pairsByExchange[strings.Split(driverName, "-")[0]],
 				OnKMessage: func(kmessage kafka.KMessage) {
-					producer.Input() <- &sarama.ProducerMessage{
-						Topic: "tickers",
-						Key:   sarama.StringEncoder(kmessage.Key()),
-						Value: sarama.ByteEncoder(kmessage.Bytes()),
+					m, ok := kmessage.(*driver.Ticker)
+					if ok && m.IsValid() {
+						producer.Input() <- &sarama.ProducerMessage{
+							Topic: topics[0],
+							Key:   sarama.StringEncoder(kmessage.Key()),
+							Value: sarama.ByteEncoder(kmessage.Bytes()),
+						}
 					}
 				},
 				OnError: func(d stream.Driver, cfg stream.DriverConfig, err error) {
@@ -47,46 +56,47 @@ func main() {
 					if err := d.Close(); err != nil {
 						log.Println(err)
 					}
-					time.Sleep(3 * time.Second)
+					time.Sleep(restartInterval)
 					stream.Open(driverName, cfg)
 				},
 			}
 			stream.Open(driverName, driverConfig)
 		}
 	}()
-	log.Println("streaming")
-	// spreads and edges
-	kafka.ProcessStream(kafka.ProcessorConfig{
-		Topic:     "tickers",
-		Offset:    sarama.OffsetNewest,
-		Processor: NewTickersProcessor(), // computes spreads and alpha
-		OnKMessage: func(kmessage kafka.KMessage) {
-			a, ok := kmessage.(*Alpha)
-			if !ok || a == nil || !a.IsValid() {
-				return
-			}
-			if a.Profit > 0 {
-				producer.Input() <- &sarama.ProducerMessage{
-					Topic: "alpha",
-					Key:   sarama.StringEncoder(a.Key()),
-					Value: sarama.ByteEncoder(a.Bytes()),
+	go func() {
+		log.Printf("[%v -> %v/%v] on", topics[0], topics[1], topics[2])
+		kafka.ProcessStream(kafka.ProcessorConfig{
+			Topic:     topics[0],
+			Offset:    sarama.OffsetNewest,
+			Processor: NewTickersProcessor(), // computes spreads and alpha
+			OnKMessage: func(kmessage kafka.KMessage) {
+				m, ok := kmessage.(*Match)
+				if !ok || m == nil {
+					return
 				}
-			}
-			producer.Input() <- &sarama.ProducerMessage{
-				Topic: "spreads",
-				Key:   sarama.StringEncoder(a.Key()),
-				Value: sarama.ByteEncoder(a.Bytes()),
-			}
-		},
-	})
-	log.Println("processing tickers")
-	// spreads and edges
-	kafka.ProcessStream(kafka.ProcessorConfig{
-		Topic:      "alpha",
-		Offset:     sarama.OffsetOldest,
-		Processor:  NewAlphaProcessor(), // inserts new alpha to db
-		OnKMessage: func(kmessage kafka.KMessage) {},
-	})
-	log.Println("processing alpha")
+				if m.Match.Calculations.ProfitLoss > 0 {
+					producer.Input() <- &sarama.ProducerMessage{
+						Topic: topics[1],
+						Key:   sarama.StringEncoder(m.Key()),
+						Value: sarama.ByteEncoder(m.Bytes()),
+					}
+				}
+				producer.Input() <- &sarama.ProducerMessage{
+					Topic: topics[2],
+					Key:   sarama.StringEncoder(m.Key()),
+					Value: sarama.ByteEncoder(m.Bytes()),
+				}
+			},
+		})
+	}()
+	go func() {
+		log.Printf("[%v -> sql] on", topics[1])
+		kafka.ProcessStream(kafka.ProcessorConfig{
+			Topic:      topics[1],
+			Offset:     sarama.OffsetOldest,
+			Processor:  &AlphaProcessor{},
+			OnKMessage: func(kmessage kafka.KMessage) {},
+		})
+	}()
 	select {}
 }

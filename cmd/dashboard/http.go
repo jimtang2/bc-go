@@ -4,12 +4,13 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/jimtang2/bc-go/lib/db"
 	_ "github.com/lib/pq"
+	"google.golang.org/protobuf/proto"
 )
 
 type SocketHandler struct {
@@ -79,7 +80,7 @@ func (socket *SocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		subChan := socket.subscribe(r)
 		for b := range subChan {
-			if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
+			if err := conn.WriteMessage(websocket.BinaryMessage, b); err != nil {
 				log.Printf("Error sending to WebSocket: %v", err)
 				return
 			}
@@ -96,24 +97,21 @@ func (socket *SocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type AlphaHandler struct {
-	mu        sync.Mutex
-	cache     []byte
-	cacheTime time.Time
 }
 
 func (h *AlphaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if time.Now().Sub(h.cacheTime) > 2*time.Second {
-		h.mu.Lock()
-		var err error
-		h.cache, err = db.AlphaItems()
-		h.mu.Unlock()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		h.cacheTime = time.Now()
+	l, _ := strconv.Atoi(r.URL.Query().Get("l"))
+	o, _ := strconv.Atoi(r.URL.Query().Get("o"))
+	resp, err := db.ProfitableMatches(l, o)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(h.cache)
+	b, err := proto.Marshal(resp)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/protobuf")
+	w.Write(b)
 }

@@ -1,11 +1,12 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
+	"log"
 
 	"github.com/IBM/sarama"
 	"github.com/jimtang2/bc-go/lib/kafka"
+	"github.com/jimtang2/bc-go/pkg/pb/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 // SpreadsProcessor just sends topic messages to the websocket http handler channel to be broadcasted to all active client websocket connections
@@ -21,7 +22,18 @@ func NewSocketProxyProcessor(channel chan []byte) *SpreadsProcessor {
 
 // SpreadsProcessor Process to insert offset id to payload for frontend table row key
 func (p *SpreadsProcessor) Process(m *sarama.ConsumerMessage) kafka.KMessage {
-	b := bytes.Replace(m.Value, []byte("{"), []byte(fmt.Sprintf(`{"i":%v,`, m.Offset)), 1)
+	v := pb.Match{}
+	err := proto.Unmarshal(m.Value, &v)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	v.Id = m.Offset
+	b, err := proto.Marshal(&v)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
 	p.channel <- b
 	return nil
 }

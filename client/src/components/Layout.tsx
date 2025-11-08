@@ -10,7 +10,7 @@ const Layout: React.FC = () => {
       '--sidebar-width': 'calc(var(--spacing) * 50)',
       '--header-height': 'calc(var(--spacing) * 12)',
     } as React.CSSProperties,
-    defaultOpen: false
+    defaultOpen: false,
   }
   return (
     <SidebarProvider {...sidebarProviderProps}>
@@ -48,7 +48,7 @@ function AppSidebar() {
   const sidebarLinks: sidebarLinkProps[] = [
     {
       to: "/",
-      label: "Spreads",
+      label: "Matches",
       icon: <ArrowLeftRight className="h-4 w-4" />,
     },
     {

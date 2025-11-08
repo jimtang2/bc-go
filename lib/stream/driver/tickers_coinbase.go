@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jimtang2/bc-go/lib/kafka"
 	"github.com/jimtang2/bc-go/lib/stream"
+	"github.com/jimtang2/bc-go/pkg/pb/v1"
 )
 
 func init() {
@@ -48,9 +49,7 @@ func (s *CoinbaseTickers) OnWebsocketMessage(messageType int, b []byte) (kafka.K
 			log.Println(err)
 			return nil, nil
 		}
-		t := v.TickerMessage()
-		t.Fmt()
-		return t, nil
+		return v.Ticker(), nil
 	} else {
 		return nil, nil
 	}
@@ -76,19 +75,22 @@ type CoinbaseTicker struct {
 	LastSize    string `json:"last_size"`
 }
 
-func (v *CoinbaseTicker) TickerMessage() *TickerMessage {
-	t := &TickerMessage{
-		Exchange: "coinbase",
+func (v *CoinbaseTicker) Ticker() *Ticker {
+	t := &Ticker{
+		Ticker: &pb.Ticker{
+			Exchange: "coinbase",
+			Pair:     v.ProductID,
+		},
 	}
-	t.Pair = v.ProductID
-	t.Bid, _ = strconv.ParseFloat(v.BestBid, 64)
-	t.BidSize, _ = strconv.ParseFloat(v.BestBidSize, 64)
-	t.Ask, _ = strconv.ParseFloat(v.BestAsk, 64)
-	t.AskSize, _ = strconv.ParseFloat(v.BestAskSize, 64)
+	t.Ticker.Bid, _ = strconv.ParseFloat(v.BestBid, 64)
+	t.Ticker.BidSize, _ = strconv.ParseFloat(v.BestBidSize, 64)
+	t.Ticker.Ask, _ = strconv.ParseFloat(v.BestAsk, 64)
+	t.Ticker.AskSize, _ = strconv.ParseFloat(v.BestAskSize, 64)
 	ts, err := time.Parse(time.RFC3339Nano, v.Time)
 	if err == nil {
-		t.EventTime = ts.UnixMilli()
+		t.Ticker.EventTime = ts.UnixMilli()
 	}
+	t.Fmt()
 	return t
 }
 

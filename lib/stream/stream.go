@@ -55,7 +55,7 @@ func Open(driverName string, driverConfig DriverConfig) {
 			if err != nil {
 				log.Printf("[%v] parse error: %v", driverName, err)
 				driverConfig.OnError(driver, driverConfig, err)
-			} else if kmessage != nil && kmessage.IsValid() {
+			} else if kmessage != nil {
 				driverConfig.OnKMessage(kmessage)
 			}
 		}

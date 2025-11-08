@@ -1,3 +1,6 @@
+/*
+The main function of this package is ProcessStream(ProcessorConfig) which provides a high level API to process records from any topic
+*/
 package kafka
 
 import (

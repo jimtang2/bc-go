@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/jimtang2/bc-go/pkg/pb";
+
+message Ticker {
+  string exchange = 1;
+  string pair = 2;
+  double bid = 3;
+  double bid_size = 4;
+  double ask = 5;
+  double ask_size = 6;
+  int64 event_time = 7;
+}
+
+message Calculations {
+  double volume = 1;      // Min(AskSize, BidSize)
+  double price_diff = 2;  // BidPrice - AskPrice
+  double price_avg = 3;   // (AskPrice + BidPrice) / 2
+  double spread = 4;      // PriceDiff * Volume
+  double spread_pct = 5;  // PriceDiff / PriceAvg
+  double bid_fee = 6;     // BidFeeRate * BidPrice * Volume
+  double ask_fee = 7;     // AskFeeRate * AskPrice * Volume
+  double profit_loss = 8; // Spread - BidFee - AskFee
+}
+
+message Match {
+  int64 id = 1;              // offset id
+  string pair = 2;           // asset pair to buy/sell
+  string ask_exchange = 3;   // buy exchange
+  double ask_price = 4;      // buy price
+  double ask_size = 5;       // buy available quantity
+  int64 ask_time = 6;        // buy ticker timestamp
+  double ask_fee_rate = 7;   // buy exchange fee rate
+  string bid_exchange = 8;   // sell exchange
+  double bid_price = 9;      // sell price
+  double bid_size = 10;      // sell available quantity
+  int64 bid_time = 11;       // sell ticker timestamp
+  double bid_fee_rate = 12;  // sell exchange fee rate
+  int64 timestamp = 13;      // Min(AskTime, BidTime)
+  Calculations calculations = 14;
+}
+
+message ProfitableMatchesResponse {
+  repeated Match matches = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  int32 count = 4;
+  int64 period_start = 5;
+  double period_profit = 6;
+}
+
+message Exchange {
+  string id = 1;
+  string name = 2;
+  double taker_fee = 3;
+  double maker_fee = 4;
+}
