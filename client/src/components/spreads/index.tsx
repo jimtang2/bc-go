@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Table from "./table"
-import type { MatchTableProps } from "./table"
+import type { SpreadsTableProps } from "./table"
 import { buildApiUrl } from "@/lib/utils"
 import { Match } from "@/gen/v1/schema";
 
@@ -27,7 +27,7 @@ export default function MatchesPage() {
           if (newData.length > 5000) {
             newData.pop()
           }
-          console.log(newData.length)
+          // console.log(newData.length)
           return newData
         })
       } catch (e) {
@@ -43,7 +43,7 @@ export default function MatchesPage() {
     return () => ws.close()
   }
   useEffect(connect, [])
-  const props: MatchTableProps = {
+  const props: SpreadsTableProps = {
     data,
     status,
     disconnect: () => socket?.close(),

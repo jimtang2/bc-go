@@ -100,9 +100,9 @@ type AlphaHandler struct {
 }
 
 func (h *AlphaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	l, _ := strconv.Atoi(r.URL.Query().Get("l"))
-	o, _ := strconv.Atoi(r.URL.Query().Get("o"))
-	resp, err := db.ProfitableMatches(l, o)
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	resp, err := db.ProfitableMatches(limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

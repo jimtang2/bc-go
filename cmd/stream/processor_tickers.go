@@ -32,17 +32,25 @@ func (proc *TickersProcessor) Process(m *sarama.ConsumerMessage) kafka.KMessage 
 		log.Println(err)
 		return nil
 	}
+	hasMod := false
 	if lo, loaded := proc.lowestAsks.LoadOrStore(ticker.Pair, &ticker); !loaded {
 		// new ticker stored
+		hasMod = true
 	} else if ticker.Ask <= lo.(*pb.Ticker).Ask {
 		// new ticker compare with loaded ticker
 		proc.lowestAsks.Store(ticker.Pair, &ticker)
+		hasMod = true
 	}
 	if hi, loaded := proc.highestBids.LoadOrStore(ticker.Pair, &ticker); !loaded {
 		// new ticker stored
+		hasMod = true
 	} else if ticker.Bid >= hi.(*pb.Ticker).Bid {
 		// new ticker compare with loaded ticker
 		proc.highestBids.Store(ticker.Pair, &ticker)
+		hasMod = true
+	}
+	if hasMod == false {
+		return nil
 	}
 	go proc.expireTicker(&ticker)
 	if match := proc.findMatch(ticker.Pair); match == nil {
@@ -88,9 +96,9 @@ func (proc *TickersProcessor) findMatch(pair string) *pb.Match {
 	c.PriceDiff = hi.Bid - lo.Ask
 	c.PriceAvg = (hi.Bid + lo.Ask) / 2
 	c.Spread = c.PriceDiff * c.Volume
-	c.SpreadPct = c.PriceDiff / c.PriceAvg
-	c.BidFee = m.BidFeeRate * hi.Bid * c.Volume
-	c.AskFee = m.AskFeeRate * lo.Ask * c.Volume
+	c.SpreadPct = c.PriceDiff / c.PriceAvg * 100
+	c.BidFee = m.BidFeeRate / 100 * hi.Bid * c.Volume
+	c.AskFee = m.AskFeeRate / 100 * lo.Ask * c.Volume
 	c.ProfitLoss = c.Spread - c.BidFee - c.AskFee
 	m.Calculations = c
 	return m

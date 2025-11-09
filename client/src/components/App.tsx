@@ -1,16 +1,16 @@
 import React from 'react';
 import { RouterProvider, createBrowserRouter, Navigate } from 'react-router-dom';
 import Layout from "./Layout"
-import MatchesPage from './matches';
-import AlphaPage from './alpha';
+import SpreadsTable from './spreads';
+import AlphaTable from './alpha';
 // import SettingsPage from './settings';
 
 const router = createBrowserRouter([{
   path: '/',
   element: <Layout />,
   children: [
-    { index: true, element: <MatchesPage /> },
-    { path: 'alpha', element: <AlphaPage />} ,
+    { index: true, element: <SpreadsTable /> },
+    { path: 'alpha', element: <AlphaTable />} ,
     // { path: 'settings', element: <SettingsPage /> },
     { path: '*', element: <Navigate to="/" replace /> },
   ],

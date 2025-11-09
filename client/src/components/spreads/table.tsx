@@ -1,19 +1,20 @@
-import React, { Fragment, useState } from "react"
-import { useReactTable, getCoreRowModel, getExpandedRowModel, getGroupedRowModel, getSortedRowModel, flexRender, type GroupingState, type SortingState } from '@tanstack/react-table';
-import { Button } from "@/components/ui/button";
+import React, { useState } from "react"
+import { useReactTable, getCoreRowModel, getGroupedRowModel, getSortedRowModel, flexRender, } from '@tanstack/react-table';
+import type { GroupingState, SortingState } from '@tanstack/react-table';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from "@/components/ui/button";
 import { Pause, Play } from 'lucide-react';
 import { Match } from "@/gen/v1/schema";
 import { columnDefs } from "./columns";
 
-export interface MatchTableProps {
+export interface SpreadsTableProps {
   data: Match[];
   status: string;
   disconnect: () => void;
   reconnect: () => void;
 };
 
-export default function MatchTable({ data = [], status = "disconnected", disconnect, reconnect, }: MatchTableProps) {
+export default function SpreadsTable({ data = [], status = "disconnected", disconnect, reconnect, }: SpreadsTableProps) {
   const [grouping, setGrouping] = React.useState<GroupingState>([
     "asset", 
     "buyExchange",
@@ -30,7 +31,6 @@ export default function MatchTable({ data = [], status = "disconnected", disconn
     columns: columnDefs,
     getCoreRowModel: getCoreRowModel(),
     getGroupedRowModel: getGroupedRowModel(),
-    getExpandedRowModel: getExpandedRowModel(),
     onGroupingChange: setGrouping,
     getSortedRowModel: getSortedRowModel(),
     onSortingChange: setSorting,
@@ -39,8 +39,11 @@ export default function MatchTable({ data = [], status = "disconnected", disconn
       sorting,
     },
     getRowId: ({ pair, askExchange, bidExchange }: Match) => `${pair}.${askExchange}.${bidExchange}`,
-    enableRowPinning: true,
+    debugAll: true,
+    debugTable: true,
+    // enableRowPinning: true,
   });
+  
   return (
     <div className="mx-2 lg:mx-3 overflow-hidden rounded-lg border">
       <div className="mx-2 my-2 flex flex-row gap-2">
@@ -68,27 +71,39 @@ export default function MatchTable({ data = [], status = "disconnected", disconn
           ))}
         </TableHeader>
         <TableBody className="">
-          {table.getRowModel().rows.map(assetRow => (
-            <Fragment key={assetRow.getValue('asset')}>
-              <TableRow className="bg-muted/30">
-                <TableCell colSpan={assetRow.getAllCells().length}>{assetRow.getValue('asset')}</TableCell>
-              </TableRow>
-              {assetRow.subRows.map(buyRow => (
-                <Fragment key={`${assetRow.getValue('asset')}.${buyRow.getValue('buyExchange')}`}>
-                  {buyRow.subRows.map(sellRow => (
-                    <Fragment key={`${assetRow.getValue('asset')}.${buyRow.getValue('buyExchange')}.${sellRow.getValue('sellExchange')}`}>
-                      <TableRow>
-                        {sellRow.getAllCells().map(cell => (
-                          <TableCell key={`${assetRow.getValue('asset')}.${buyRow.getValue('buyExchange')}.${sellRow.getValue('sellExchange')}.${cell.column.id}.${sellRow.getValue('time')}`}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    </Fragment>
-                  ))}
-                </Fragment>
-              ))}              
-            </Fragment>)
+          {table.getRowModel().rows.map((assetRow, assetRowIdx) => 
+            assetRow.subRows.map(buyRow => 
+              buyRow.subRows.map(sellRow => 
+                sellRow.subRows.map((spreadRow, spreadRowIdx) => {
+                  const asset = assetRow.getValue('asset')
+                  const buyExchange = buyRow.getValue('buyExchange')
+                  const sellExchange = sellRow.getValue('sellExchange')
+                  if (spreadRowIdx >= 1) {
+                    return null
+                  }
+                  const keys = [asset, buyExchange, sellExchange, spreadRowIdx, spreadRow.getValue('id')]
+                  return (
+                    <TableRow key={keys.join(".")} className={assetRowIdx % 2 === 1 ? "bg-muted/30" : "bg-muted/60"}>
+                      {spreadRow.getAllCells().map((cell, cellIdx) => {
+                        if (cellIdx < 4) {
+                          return (
+                            <TableCell key={[...keys, cellIdx].join(".")}>
+                              {spreadRowIdx === 0 && flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
+                          )
+                        } else {
+                          return (
+                            <TableCell key={[...keys, cellIdx].join(".")}>
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
+                          )
+                        }
+                      })}
+                    </TableRow>
+                  )
+                })
+              )
+            )
           )}
         </TableBody>
       </Table>

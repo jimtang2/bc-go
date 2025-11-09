@@ -41,9 +41,9 @@ export default function ProfitableMatchesTable({ response, }: ProfitableMatchesT
             </TableRow>
           ))}
         </TableHeader>
-        <TableBody className="font-mono">
-          {table.getRowModel().rows.map(row => 
-            <TableRow key={row.id}>
+        <TableBody className="">
+          {table.getRowModel().rows.map((row, rowIdx) => 
+            <TableRow key={row.id} className={rowIdx % 2 === 1 ? "bg-muted/30" : "bg-muted/60"}>
               {row.getVisibleCells().map((cell) => (
                 <TableCell key={cell.id} style={{ width: `${cell.column.columnDef.size}%` }}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
               ))}
@@ -56,9 +56,10 @@ export default function ProfitableMatchesTable({ response, }: ProfitableMatchesT
 
 function PaginationInfo({ response }: { response: ProfitableMatchesResponse | null; }) {
   const since = new Date(Number(response?.periodStart || 0)).toLocaleDateString()
+  const profit = new Intl.NumberFormat("us-US", { style: "currency", currency: "USD" }).format(response?.periodProfit || 0)
   return (
     <div className="flex flex-row items-center gap-1 text-sm">
-      <span>Current Period: {response?.periodProfit.toFixed(2)}$ (since {since})</span>
+      <span>Current Period: {profit} (since {since})</span>
     </div>
   );
 };

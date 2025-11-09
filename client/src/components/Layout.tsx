@@ -48,7 +48,7 @@ function AppSidebar() {
   const sidebarLinks: sidebarLinkProps[] = [
     {
       to: "/",
-      label: "Matches",
+      label: "Spreads",
       icon: <ArrowLeftRight className="h-4 w-4" />,
     },
     {

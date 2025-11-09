@@ -129,7 +129,7 @@ func InsertMatch(m *pb.Match) error {
 
 func ProfitableMatches(limit, offset int) (*pb.ProfitableMatchesResponse, error) {
 	if limit == 0 {
-		limit = 100
+		limit = 1000
 	}
 
 	var resp pb.ProfitableMatchesResponse
@@ -145,7 +145,7 @@ func ProfitableMatches(limit, offset int) (*pb.ProfitableMatchesResponse, error)
 	        calc_volume, calc_price_diff, calc_price_avg,
 	        calc_spread, calc_spread_pct, calc_bid_fee, calc_ask_fee, calc_profit_loss
 	    FROM matches
-	    WHERE calc_profit_loss > 0
+	    WHERE calc_profit_loss > 0.1
 	),
 	paged AS (
 	    SELECT row_to_json(t)::TEXT AS match_json

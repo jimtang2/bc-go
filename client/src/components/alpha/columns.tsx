@@ -1,82 +1,95 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import ExchangeIcon from "@/components/icon";
-import clsx from "clsx";
 import { Match } from "@/gen/v1/schema";
 
 const columnDefs: ColumnDef<Match,any>[] = [
-  {
-    header: 'Event Time',
-    size: 5, 
-    accessorFn: ({ askTime, bidTime }) => {
-      if (askTime > 0) return new Date(Number(askTime)).toLocaleTimeString()
-      else if (bidTime > 0) return new Date(Number(bidTime)).toLocaleTimeString()
-      else return ""
-    },
-    cell: (info) => <span className="font-mono">{info.getValue()}</span>,
-  },
   { 
+    id: 'asset',
     header: 'Asset', 
-    accessorKey: 'pair',
-    size: 5, 
-    cell: (info) => <span className="font-normal">{info.getValue().split(":")[0]}</span>,
+    accessorFn: ({ pair }) => pair.split(":")[0],
+    cell: info => info.getValue(),
+    size: 7.5,
   },
   { 
-    header: 'Buy Ex.', 
+    id: 'buyExchange',
+    header: 'Buy Exchange', 
     accessorKey: 'askExchange',
-    size: 12.5, 
     cell: (info) => <ExchangeCell name={info.getValue()} />,
-  },
-  { 
-    header: 'Sell Ex.', 
-    accessorKey: 'bidExchange',
-    size: 12.5, 
-    cell: (info) => <ExchangeCell name={info.getValue()} />,
-  },
-  { 
-    header: 'Volume', 
-    accessorKey: 'calculations.volume',
-    size: 7.5, 
-    cell: (info) => <span className="font-light font-mono">{info.getValue()}</span>,
-  },
-  // { 
-  //   header: 'Price Spread', 
-  //   accessorKey: 'calculations.spread',
-  //   size: 5, 
-  //   cell: (info) => <span className="font-light font-mono">{info.getValue().toFixed(2)}</span>,
-  // },
-  // { 
-  //   header: 'Spread %', 
-  //   accessorKey: 'calculations.spreadPct',
-  //   size: 7.5, 
-  //   cell: (info) => <span className="font-light font-mono">{info.getValue().toFixed(3)}%</span>,
-  // },
-  // { 
-  //   header: 'Buy Position $', 
-  //   accessorFn: ({ bidPrice, calculations: { volume }}) => bidPrice * volume,
-  //   size: 10, 
-  //   cell: (info) => <span className="font-light font-mono">{info.getValue().toFixed(2).toLocaleString()}</span>,
-  // },
-  { 
-    header: 'Sell Position $', 
-    accessorFn: ({ askPrice, calculations}) => askPrice * (calculations?.volume || 0),
     size: 10, 
-    cell: (info) => <span className="font-light font-mono">{info.getValue().toFixed(2).toLocaleString()}</span>,
   },
   { 
+    id: 'sellExchange',
+    header: 'Sell Exchange', 
+    accessorKey: 'bidExchange',
+    cell: (info) => <ExchangeCell name={info.getValue()} />,
+    size: 10, 
+  },
+  { 
+    header: 'Size', 
+    accessorKey: 'calculations.volume',
+    size: 10, 
+    cell: (info) => info.getValue(),
+  },
+  { 
+    id: 'buyPosition',
+    header: 'Buy $', 
+    accessorFn: ({ bidPrice, calculations }) => bidPrice * (calculations?.volume || 0),
+    cell: info => new Intl.NumberFormat("us-US", { style: "currency", currency: "USD" }).format(info.getValue()),
+    size: 10, 
+  },
+  { 
+    id: 'sellPosition',
+    header: 'Sell $', 
+    accessorFn: ({ askPrice, calculations }) => askPrice * (calculations?.volume || 0),
+    cell: info => new Intl.NumberFormat("us-US", { style: "currency", currency: "USD" }).format(info.getValue()),
+    size: 10, 
+  },
+  { 
+    id: 'spread',
+    header: 'Spread', 
+    accessorKey: 'calculations.spread',
+    cell: info => new Intl.NumberFormat("us-US", { style: "currency", currency: "USD" }).format(info.getValue()),
+    size: 10, 
+  },
+  { 
+    header: 'Spread %', 
+    accessorKey: 'calculations.spreadPct',
+    cell: info => `${info.getValue().toFixed(2)}%`,
+    size: 7.5,
+  },
+  { 
+    id: 'fees',
+    header: 'Fee %', 
+    accessorFn: ({ askFeeRate, bidFeeRate }) => {
+      return askFeeRate + bidFeeRate
+    },
+    cell: info => `${info.getValue().toFixed(2)}%`,
+    size: 7.5,
+  },
+  { 
+    id: 'profitLoss',
     header: 'P/L $', 
     accessorKey: 'calculations.profitLoss',
-    size: 7.5, 
-    cell: (info) => {
-      const className = clsx(["font-bold", info.getValue() > 0 ? "text-green-500" : "text-red-500"])
-      return <span className={className}>{info.getValue().toFixed(2)}</span>
+    cell: info => {
+      return <span className={info.getValue() > 0 ? "text-green-500" : "text-red-500"}>{new Intl.NumberFormat("us-US", { style: "currency", currency: "USD" }).format(info.getValue())}</span>
     },
+    size: 7.5,
   },
-  // { 
-  //   header: 'Fee %', 
-  //   accessorFn: ({ askFeeRate, bidFeeRate }) => (askFeeRate + bidFeeRate).toFixed(2).toString(),
-  //   size: 7.5, 
-  //   cell: (info) => <span className="">{info.getValue()}%</span>,
-  // },
+  {
+    id: 'time',
+    header: 'Event Time',
+    accessorFn: ({ askTime, bidTime, timestamp }) => {
+      if (askTime > 0) {
+        return askTime 
+      } else if (bidTime > 0) {
+        return bidTime
+      } else {
+        return timestamp
+      }
+    },
+    cell: info => new Date(Number(info.getValue())).toLocaleString("en-US"),
+    size: 10,
+  },
 ];
 
 function ExchangeCell({ name }: { name: string; }) {
