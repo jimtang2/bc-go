@@ -1,0 +1,20 @@
+micronaut:
+  security:
+    enabled: true
+    token:
+      jwt:
+        signatures:
+          secret:
+            generator:
+              secret: "Show Me The Money -- Starcraft Cheat Code"
+akhq:
+  security:
+    basic-auth:
+      - username: admin
+        password: 3f3dca225f994d65c91c905282f3b43531cecae8836324675b50e3d26f36a7ca
+        groups: 
+        - admin
+  connections:
+    docker-kafka-server:
+      properties:
+        bootstrap.servers: "kafka:9092"
