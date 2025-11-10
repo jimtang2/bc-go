@@ -70,13 +70,25 @@ export const columnDefs: ColumnDef<Match,any>[] = [
     id: 'spread',
     header: 'Spread', 
     accessorKey: 'calculations.spread',
-    cell: info => new Intl.NumberFormat("us-US", { style: "currency", currency: "USD" }).format(info.getValue()),
+    cell: info => {
+      const className = clsx([
+        info.getValue() > 0.01 && "text-green-500",
+        info.getValue() < 0 && "text-red-500",
+      ])
+      return <span className={className}>{new Intl.NumberFormat("us-US", { style: "currency", currency: "USD" }).format(info.getValue())}</span>
+    },
     size: 10, 
   },
   { 
     header: 'Spread %', 
     accessorKey: 'calculations.spreadPct',
-    cell: info => `${info.getValue().toFixed(2)}%`,
+    cell: info => {
+      const className = clsx([
+        info.getValue() > 0.01 && "text-green-500",
+        info.getValue() < 0 && "text-red-500",
+      ])
+      return <span className={className}>{`${info.getValue().toFixed(2)}%`}</span>
+    },
     size: 10, 
   },
   { 
@@ -85,7 +97,6 @@ export const columnDefs: ColumnDef<Match,any>[] = [
     accessorKey: 'calculations.profitLoss',
     cell: info => {
       const className = clsx([
-        "font-bold", 
         info.getValue() > 0 ? "text-green-500" : "text-red-500",
       ])
       return <span className={className}>{new Intl.NumberFormat("us-US", { style: "currency", currency: "USD" }).format(info.getValue())}</span>
