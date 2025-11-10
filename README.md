@@ -2,19 +2,28 @@
 
 ## Description
 
-Application code for the arbitrage system
+```
+git clone https://github.com/jimtang2/bc-go.git 
+cd bc-go && docker compose up 
+```
 
-### Dependencies
+Visit `http://localhost:9000`
 
-1. `github.com/IBM/sarama`
-2. `github.com/lib/pq`
+## System Components
 
-## Project Structure
+1. Kafka
+2. Postgres
+3. AKHQ dashboard (optional)
+4. bc_stream
+5. bc_dashboard
 
-| Process       | Topic Output | Packages              | Dep Services |
-| ------------- | ------------ | --------------------- | ------------ |
-| `cmd/tickers` | `tickers`    | `lib/stream` `lib/db` | `kafka` `pg` |
-| `cmd/spreads` | `spreads`    | `lib/stream` `lib/db` | `kafka` `pg` |
-| `cmd/alpha`   | `alpha`      | `lib/stream` `lib/db` | `kafka` `pg` |
-| `cmd/api`     |              | `lib/stream` `lib/db` | `kafka` `pg` |
+## Basic Structure
+
+| Process             |                                               |
+| ------------------- | --------------------------------------------- |
+| 1. Kafka            |                                               |
+| 2. Postgres         |                                               |
+| 3. AKHQ             |                                               |
+| 4. bc_stream        | `cmd/stream`                                  |
+| 5. bc_dashboard     | `cmd/dashboard`, `client`                     |
 

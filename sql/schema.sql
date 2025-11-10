@@ -1,4 +1,3 @@
--- for dashboard/dashboard-ui mock exchanges endpoint to create columns in dashboard-ui/src/table-pairs.tsx
 CREATE TABLE exchanges (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -17,8 +16,6 @@ INSERT INTO exchanges (id, name, taker_fee, maker_fee) VALUES
     ('gemini',    'Gemini',    0.35, 0.25)   -- 0.35% taker, 0.25% maker
 ON CONFLICT DO NOTHING;
 
--- for dashboard/dashboard-ui mock pairs endpoint to create rows in dashboard-ui/src/table-pairs.tsx
--- for fetcher fetched pairs 
 CREATE TABLE pairs (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,

@@ -11,7 +11,6 @@ import (
 	"github.com/jimtang2/bc-go/lib/kafka"
 	"github.com/jimtang2/bc-go/lib/stream"
 	"github.com/jimtang2/bc-go/lib/stream/driver"
-	_ "github.com/jimtang2/bc-go/lib/stream/driver"
 )
 
 var (
@@ -22,6 +21,11 @@ var (
 		"coinbase-tickers",
 		"kraken-tickers",
 		"okx-tickers",
+	}
+	topics = []string{
+		"stream_tickers",
+		"stream_alpha",
+		"stream_matches",
 	}
 )
 
@@ -35,7 +39,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	topics := []string{"stream_tickers", "stream_alpha", "stream_matches"}
 	go func() {
 		log.Printf("[stream -> %v] on", topics[0])
 		for _, driverName := range drivers {
