@@ -80,18 +80,6 @@ func ExchangeFees() map[string]float64 {
 	return v
 }
 
-// func InsertAlpha(a Alpha) error {
-// 	_, err := db().Exec(`insert into alpha (id, pair, spread, volume, ask_exchange, ask_price, ask_size, ask_time, ask_fee, bid_exchange, bid_price, bid_size, bid_time, bid_fee, profit, timestamp) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) on conflict do nothing`, a.ID, a.Pair, a.Spread, a.Volume, a.AskExchange, a.AskPrice, a.AskSize, a.AskTime, a.AskFee, a.BidExchange, a.BidPrice, a.BidSize, a.BidTime, a.BidFee, a.Profit, a.Timestamp)
-// 	return err
-// }
-
-// func AlphaItems() ([]byte, error) {
-// 	b := []byte{}
-// 	err := db().QueryRow(`select json_build_object('items', coalesce(json_agg(row_to_json(t)), '[]'), 'period', (select json_build_object('count', count(*), 'start', min(timestamp), 'end', max(timestamp), 'total', coalesce(sum(profit), 0.0)) from alpha)
-//     ) as response from (select id as id, ask_exchange as ax, ask_price as ap, ask_size as as, ask_fee as af, ask_time as at, bid_exchange as bx, bid_price as bp, bid_size as bs, bid_fee as bf, bid_time as bt, pair as p, spread as s, volume as v, profit as pl, timestamp as ts from alpha where profit > 0.01 order by timestamp desc) t;`).Scan(&b)
-// 	return b, err
-// }
-
 func InsertMatch(m *pb.Match) error {
 	_, err := db().Exec(`
 		INSERT INTO matches (

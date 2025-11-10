@@ -10,7 +10,7 @@ const Layout: React.FC = () => {
       '--sidebar-width': 'calc(var(--spacing) * 50)',
       '--header-height': 'calc(var(--spacing) * 12)',
     } as React.CSSProperties,
-    defaultOpen: false,
+    defaultOpen: true,
   }
   return (
     <SidebarProvider {...sidebarProviderProps}>
