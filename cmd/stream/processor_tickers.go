@@ -13,6 +13,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+var (
+	// tickerExpirationDuration controls how long ticker is valid for a match
+	tickerExpirationDuration = 100 * time.Millisecond
+)
+
 type TickersProcessor struct {
 	highestBids sync.Map // string → *pb.Ticker
 	lowestAsks  sync.Map // string → *pb.Ticker
@@ -68,7 +73,7 @@ func (proc *TickersProcessor) findMatch(pair string) *pb.Match {
 	}
 	lo := loI.(*pb.Ticker)
 	hi := hiI.(*pb.Ticker)
-	if lo == hi {
+	if lo == hi || lo.Exchange == hi.Exchange {
 		return nil
 	}
 	m := &pb.Match{
@@ -93,6 +98,12 @@ func (proc *TickersProcessor) findMatch(pair string) *pb.Match {
 			return b
 		}
 	}(hi.BidSize, lo.BidSize)
+	/*
+		A bid order is one to purchase a position; corresponding to a system sell.
+		Conversely, an ask order is one to sell a position; corresponding to a system buy.
+		The spread is calculated to be the system sell position price minus system buy position price.
+		Profit results in sell position price - buy position price - fees > 0
+	*/
 	c.PriceDiff = hi.Bid - lo.Ask
 	c.PriceAvg = (hi.Bid + lo.Ask) / 2
 	c.Spread = c.PriceDiff * c.Volume
@@ -105,7 +116,7 @@ func (proc *TickersProcessor) findMatch(pair string) *pb.Match {
 }
 
 func (proc *TickersProcessor) expireTicker(t *pb.Ticker) {
-	time.Sleep(1 * time.Second)
+	time.Sleep(tickerExpirationDuration)
 	if lo, loaded := proc.lowestAsks.Load(t.Pair); loaded && lo == t {
 		proc.lowestAsks.Delete(t.Pair)
 	}

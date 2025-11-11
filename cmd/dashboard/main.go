@@ -28,18 +28,27 @@ func init() {
 
 func main() {
 	config.Read()
-	socketHandler := NewSocketHandler()
 	fs := statigz.FileServer(staticFiles, brotli.AddEncoding, statigz.FSPrefix("dist"))
+	matchesHandler := NewMatchesHandler()
 	kafka.ProcessStream(kafka.ProcessorConfig{
 		Topic:      "stream_matches",
 		Offset:     sarama.OffsetNewest,
-		Processor:  NewSocketProxyProcessor(socketHandler.channel),
+		Processor:  NewMatchesProxyProcessor(matchesHandler.channel),
+		OnKMessage: func(kmessage kafka.KMessage) {},
+	})
+	tickersHandler := NewTickersHandler()
+	kafka.ProcessStream(kafka.ProcessorConfig{
+		Topic:      "stream_tickers",
+		Offset:     sarama.OffsetNewest,
+		Processor:  NewTickersProxyProcessor(tickersHandler.channel),
 		OnKMessage: func(kmessage kafka.KMessage) {},
 	})
 	http.Handle("/", fs)
 	http.Handle("/alpha/", http.StripPrefix("/alpha", fs))
-	http.Handle("/ws", socketHandler)
+	http.Handle("/ws/matches", matchesHandler)
+	http.Handle("/ws/tickers", tickersHandler)
 	http.Handle("/api/alpha", &AlphaHandler{})
+	http.Handle("/api/exchanges", &ExchangesHandler{})
 	log.Println("dashboard listening on", viper.GetString("http.port"))
 	if err := http.ListenAndServe(viper.GetString("http.port"), cors.New(cors.Options{
 		AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),

@@ -9,19 +9,19 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// SpreadsProcessor just sends topic messages to the websocket http handler channel to be broadcasted to all active client websocket connections
-type SpreadsProcessor struct {
+// MatchesProcessor just sends topic messages to the websocket http handler channel to be broadcasted to all active client websocket connections
+type MatchesProcessor struct {
 	channel chan []byte
 }
 
-func NewSocketProxyProcessor(channel chan []byte) *SpreadsProcessor {
-	return &SpreadsProcessor{
+func NewMatchesProxyProcessor(channel chan []byte) *MatchesProcessor {
+	return &MatchesProcessor{
 		channel: channel,
 	}
 }
 
-// SpreadsProcessor Process to insert offset id to payload for frontend table row key
-func (p *SpreadsProcessor) Process(m *sarama.ConsumerMessage) kafka.KMessage {
+// MatchesProcessor Process to insert offset id to payload for frontend table row key
+func (p *MatchesProcessor) Process(m *sarama.ConsumerMessage) kafka.KMessage {
 	v := pb.Match{}
 	err := proto.Unmarshal(m.Value, &v)
 	if err != nil {
@@ -35,5 +35,20 @@ func (p *SpreadsProcessor) Process(m *sarama.ConsumerMessage) kafka.KMessage {
 		return nil
 	}
 	p.channel <- b
+	return nil
+}
+
+type TickersProcessor struct {
+	channel chan []byte
+}
+
+func NewTickersProxyProcessor(channel chan []byte) *TickersProcessor {
+	return &TickersProcessor{
+		channel: channel,
+	}
+}
+
+func (p *TickersProcessor) Process(m *sarama.ConsumerMessage) kafka.KMessage {
+	p.channel <- m.Value
 	return nil
 }

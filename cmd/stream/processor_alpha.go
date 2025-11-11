@@ -18,7 +18,9 @@ func (p *AlphaProcessor) Process(m *sarama.ConsumerMessage) kafka.KMessage {
 		log.Println(err)
 		return nil
 	}
-	log.Println(&v)
+	if v.AskExchange == v.BidExchange {
+		return nil
+	}
 	v.Id = m.Offset
 	if err := db.InsertMatch(&v); err != nil {
 		log.Println(err)

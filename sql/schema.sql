@@ -2,18 +2,19 @@ CREATE TABLE exchanges (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     taker_fee DECIMAL NOT NULL,
-    maker_fee DECIMAL NOT NULL
+    maker_fee DECIMAL NOT NULL,
+    chart_color TEXT NOT NULL DEFAULT '#fff'
 );
 
-INSERT INTO exchanges (id, name, taker_fee, maker_fee) VALUES
-    ('binance',   'Binance',   0.10, 0.10),  -- 0.10%
-    ('bitfinex',  'Bitfinex',  0.20, 0.10),  -- 0.20% taker, 0.10% maker
-    ('uniswap',   'Uniswap',   0.30, 0.30),  -- ~0.30% (varies by pool)
-    ('coinbase',  'Coinbase',  0.60, 0.40),  -- 0.60% taker, 0.40% maker
-    ('kraken',    'Kraken',    0.26, 0.16),  -- 0.26% taker, 0.16% maker
-    ('bybit',     'Bybit',     0.10, 0.06),  -- 0.10% taker, 0.06% maker
-    ('okx',       'OKX',       0.10, 0.08),  -- 0.10% taker, 0.08% maker
-    ('gemini',    'Gemini',    0.35, 0.25)   -- 0.35% taker, 0.25% maker
+INSERT INTO exchanges (id, name, taker_fee, maker_fee, chart_color) VALUES
+    ('binance',   'Binance',   0.10, 0.10, '#eede38'),  -- 0.10%
+    ('bitfinex',  'Bitfinex',  0.20, 0.10, '#bcc055'),  -- 0.20% taker, 0.10% maker
+    ('uniswap',   'Uniswap',   0.30, 0.30, '#ec4270'),  -- ~0.30% (varies by pool)
+    ('coinbase',  'Coinbase',  0.60, 0.40, '#55a7de'),  -- 0.60% taker, 0.40% maker
+    ('kraken',    'Kraken',    0.26, 0.16, '#5d43d5'),  -- 0.26% taker, 0.16% maker
+    ('bybit',     'Bybit',     0.10, 0.06, '#ebab2c'),  -- 0.10% taker, 0.06% maker
+    ('okx',       'OKX',       0.10, 0.08, '#fff'),  -- 0.10% taker, 0.08% maker
+    ('gemini',    'Gemini',    0.35, 0.25, '#61d7f5')   -- 0.35% taker, 0.25% maker
 ON CONFLICT DO NOTHING;
 
 CREATE TABLE pairs (
@@ -133,3 +134,21 @@ CREATE TABLE IF NOT EXISTS matches (
     calc_ask_fee        DOUBLE PRECISION NOT NULL,  
     calc_profit_loss    DOUBLE PRECISION NOT NULL   
 );
+
+CREATE TABLE IF NOT EXISTS visits (
+    id BIGSERIAL PRIMARY KEY,
+    visited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ip_address INET,
+    user_agent TEXT,
+    referer TEXT,
+    path TEXT NOT NULL,
+    method TEXT NOT NULL,
+    protocol TEXT NOT NULL,
+    host TEXT NOT NULL,
+    query_string TEXT,
+    remote_addr TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_visits_visited_at ON visits(visited_at DESC);
+CREATE INDEX IF NOT EXISTS idx_visits_ip ON visits(ip_address);
+CREATE INDEX IF NOT EXISTS idx_visits_path ON visits(path);
+    

@@ -56,4 +56,9 @@ message Exchange {
   string name = 2;
   double taker_fee = 3;
   double maker_fee = 4;
+  string chart_color = 5;
+}
+
+message ExchangesResponse {
+  repeated Exchange exchanges = 1;
 }

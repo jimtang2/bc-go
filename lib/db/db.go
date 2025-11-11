@@ -4,6 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"net"
+	"net/http"
+	"strings"
 
 	"github.com/jimtang2/bc-go/pkg/pb/v1"
 	_ "github.com/lib/pq"
@@ -54,14 +57,14 @@ func TrackedPairs(exchange string) (pairs []string) {
 
 func Exchanges() []*pb.Exchange {
 	v := []*pb.Exchange{}
-	rows, err := db().Query(`select id, name, taker_fee, maker_fee from exchanges`)
+	rows, err := db().Query(`select id, name, taker_fee, maker_fee, chart_color from exchanges`)
 	if err != nil {
 		return v
 	}
 	defer rows.Close()
 	for rows.Next() {
 		e := pb.Exchange{}
-		if err := rows.Scan(&e.Id, &e.Name, &e.TakerFee, &e.MakerFee); err != nil {
+		if err := rows.Scan(&e.Id, &e.Name, &e.TakerFee, &e.MakerFee, &e.ChartColor); err != nil {
 			return v
 		}
 		v = append(v, &e)
@@ -116,76 +119,38 @@ func InsertMatch(m *pb.Match) error {
 }
 
 func ProfitableMatches(limit, offset int) (*pb.ProfitableMatchesResponse, error) {
-	if limit == 0 {
-		limit = 1000
-	}
-
 	var resp pb.ProfitableMatchesResponse
 
 	query := `
-	WITH filtered AS (
-	    SELECT 
-	        id,
-	        pair,
-	        ask_exchange, ask_price, ask_size, ask_time, ask_fee_rate,
-	        bid_exchange, bid_price, bid_size, bid_time, bid_fee_rate,
-	        timestamp,
-	        calc_volume, calc_price_diff, calc_price_avg,
-	        calc_spread, calc_spread_pct, calc_bid_fee, calc_ask_fee, calc_profit_loss
-	    FROM matches
-	    WHERE calc_profit_loss > 0.1
+	with filtered as ( 
+		select id, pair, ask_exchange, ask_price, ask_size, ask_time, ask_fee_rate, bid_exchange, bid_price, bid_size, bid_time, bid_fee_rate, timestamp, calc_volume, calc_price_diff, calc_price_avg, calc_spread, calc_spread_pct, calc_bid_fee, calc_ask_fee, calc_profit_loss 
+		from matches 
+		where calc_profit_loss > 0.1 
 	),
-	paged AS (
-	    SELECT row_to_json(t)::TEXT AS match_json
-	    FROM (
-	        SELECT
-	            id,
-	            pair,
-	            ask_exchange,
-	            ask_price,
-	            ask_size,
-	            ask_time,
-	            ask_fee_rate,
-	            bid_exchange,
-	            bid_price,
-	            bid_size,
-	            bid_time,
-	            bid_fee_rate,
-	            timestamp,
-	            (
-	                SELECT row_to_json(c)
-	                FROM (
-	                    SELECT
-	                        calc_volume AS volume,
-	                        calc_price_diff AS price_diff,
-	                        calc_price_avg AS price_avg,
-	                        calc_spread AS spread,
-	                        calc_spread_pct AS spread_pct,
-	                        calc_bid_fee AS bid_fee,
-	                        calc_ask_fee AS ask_fee,
-	                        calc_profit_loss AS profit_loss
-	                ) c
-	            ) AS calculations
-	        FROM filtered
-	        ORDER BY timestamp DESC
+	paged as ( 
+		select row_to_json(t)::text as match_json from ( 
+			select 
+			id, pair, ask_exchange, ask_price, ask_size, ask_time, ask_fee_rate, bid_exchange, bid_price, bid_size, bid_time, bid_fee_rate, timestamp, 
+				( select row_to_json(c) from ( 
+						select calc_volume as volume, calc_price_diff as price_diff, calc_price_avg as price_avg, calc_spread as spread, calc_spread_pct as spread_pct, calc_bid_fee as bid_fee, calc_ask_fee as ask_fee, calc_profit_loss as profit_loss 
+					) c ) as calculations
+	    from filtered
+	        order by timestamp desc
 	        LIMIT $1 OFFSET $2
 	    ) t
 	),
-	agg AS (
-	    SELECT
-	        COUNT(*) AS total_count,
-	        MIN(timestamp) AS min_ts,
-	        COALESCE(SUM(calc_profit_loss), 0.0) AS total_profit
-	    FROM filtered
+	agg as (
+	    select count(*) as total_count, min(timestamp) as min_ts, coalesce(sum(calc_profit_loss), 0.0) as total_profit from filtered
 	)
-	SELECT JSON_BUILD_OBJECT(
-	    'matches', COALESCE((SELECT JSON_AGG(match_json::json) FROM paged), '[]'),
-	    'limit', $1,
-	    'offset', $2,
-	    'count', (SELECT total_count FROM agg),
-	    'period_start', (SELECT min_ts FROM agg),
-	    'period_profit', (SELECT total_profit FROM agg)
-	)::TEXT;
+	select json_build_object( 
+		'matches', 
+		coalesce((select json_agg(match_json::json) from paged), '[]'), 
+		'limit', $1, 
+		'offset', $2, 
+		'count', (SELECT total_count from agg), 
+		'period_start', (SELECT min_ts from agg), 
+		'period_profit', (SELECT total_profit from agg)
+	)::text;
 	`
 
 	var jsonResp []byte
@@ -199,4 +164,50 @@ func ProfitableMatches(limit, offset int) (*pb.ProfitableMatchesResponse, error)
 	}
 
 	return &resp, nil
+}
+
+func LogVisit(r *http.Request) error {
+	ip := getClientIP(r)
+	path := r.URL.Path
+	if path == "" {
+		path = "/"
+	}
+	queryString := r.URL.RawQuery
+	query := `
+		INSERT INTO visits (
+			ip_address, user_agent, referer, path, method, protocol,
+			host, query_string, remote_addr
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9
+		)
+	`
+	_, err := db().Exec(query,
+		ip,
+		r.UserAgent(),
+		r.Referer(),
+		path,
+		r.Method,
+		r.Proto,
+		r.Host,
+		queryString,
+		r.RemoteAddr,
+	)
+	return err
+}
+
+func getClientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		parts := strings.Split(fwd, ",")
+		if len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+	if real := r.Header.Get("X-Real-IP"); real != "" {
+		return real
+	}
+	host, _, _ := net.SplitHostPort(r.RemoteAddr)
+	if host != "" {
+		return host
+	}
+	return r.RemoteAddr
 }

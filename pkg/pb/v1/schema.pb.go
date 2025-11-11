@@ -451,6 +451,7 @@ type Exchange struct {
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	TakerFee      float64                `protobuf:"fixed64,3,opt,name=taker_fee,json=takerFee,proto3" json:"taker_fee,omitempty"`
 	MakerFee      float64                `protobuf:"fixed64,4,opt,name=maker_fee,json=makerFee,proto3" json:"maker_fee,omitempty"`
+	ChartColor    string                 `protobuf:"bytes,5,opt,name=chart_color,json=chartColor,proto3" json:"chart_color,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -513,6 +514,57 @@ func (x *Exchange) GetMakerFee() float64 {
 	return 0
 }
 
+func (x *Exchange) GetChartColor() string {
+	if x != nil {
+		return x.ChartColor
+	}
+	return ""
+}
+
+type ExchangesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Exchanges     []*Exchange            `protobuf:"bytes,1,rep,name=exchanges,proto3" json:"exchanges,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExchangesResponse) Reset() {
+	*x = ExchangesResponse{}
+	mi := &file_v1_schema_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExchangesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExchangesResponse) ProtoMessage() {}
+
+func (x *ExchangesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_v1_schema_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExchangesResponse.ProtoReflect.Descriptor instead.
+func (*ExchangesResponse) Descriptor() ([]byte, []int) {
+	return file_v1_schema_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ExchangesResponse) GetExchanges() []*Exchange {
+	if x != nil {
+		return x.Exchanges
+	}
+	return nil
+}
+
 var File_v1_schema_proto protoreflect.FileDescriptor
 
 const file_v1_schema_proto_rawDesc = "" +
@@ -563,12 +615,16 @@ const file_v1_schema_proto_rawDesc = "" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\x12\x14\n" +
 	"\x05count\x18\x04 \x01(\x05R\x05count\x12!\n" +
 	"\fperiod_start\x18\x05 \x01(\x03R\vperiodStart\x12#\n" +
-	"\rperiod_profit\x18\x06 \x01(\x01R\fperiodProfit\"h\n" +
+	"\rperiod_profit\x18\x06 \x01(\x01R\fperiodProfit\"\x89\x01\n" +
 	"\bExchange\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
 	"\ttaker_fee\x18\x03 \x01(\x01R\btakerFee\x12\x1b\n" +
-	"\tmaker_fee\x18\x04 \x01(\x01R\bmakerFeeB\"Z github.com/jimtang2/bc-go/pkg/pbb\x06proto3"
+	"\tmaker_fee\x18\x04 \x01(\x01R\bmakerFee\x12\x1f\n" +
+	"\vchart_color\x18\x05 \x01(\tR\n" +
+	"chartColor\"C\n" +
+	"\x11ExchangesResponse\x12.\n" +
+	"\texchanges\x18\x01 \x03(\v2\x10.api.v1.ExchangeR\texchangesB\"Z github.com/jimtang2/bc-go/pkg/pbb\x06proto3"
 
 var (
 	file_v1_schema_proto_rawDescOnce sync.Once
@@ -582,22 +638,24 @@ func file_v1_schema_proto_rawDescGZIP() []byte {
 	return file_v1_schema_proto_rawDescData
 }
 
-var file_v1_schema_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_v1_schema_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_v1_schema_proto_goTypes = []any{
 	(*Ticker)(nil),                    // 0: api.v1.Ticker
 	(*Calculations)(nil),              // 1: api.v1.Calculations
 	(*Match)(nil),                     // 2: api.v1.Match
 	(*ProfitableMatchesResponse)(nil), // 3: api.v1.ProfitableMatchesResponse
 	(*Exchange)(nil),                  // 4: api.v1.Exchange
+	(*ExchangesResponse)(nil),         // 5: api.v1.ExchangesResponse
 }
 var file_v1_schema_proto_depIdxs = []int32{
 	1, // 0: api.v1.Match.calculations:type_name -> api.v1.Calculations
 	2, // 1: api.v1.ProfitableMatchesResponse.matches:type_name -> api.v1.Match
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	4, // 2: api.v1.ExchangesResponse.exchanges:type_name -> api.v1.Exchange
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_v1_schema_proto_init() }
@@ -611,7 +669,7 @@ func file_v1_schema_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_v1_schema_proto_rawDesc), len(file_v1_schema_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

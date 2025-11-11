@@ -190,6 +190,19 @@ export interface Exchange {
      * @generated from protobuf field: double maker_fee = 4
      */
     makerFee: number;
+    /**
+     * @generated from protobuf field: string chart_color = 5
+     */
+    chartColor: string;
+}
+/**
+ * @generated from protobuf message api.v1.ExchangesResponse
+ */
+export interface ExchangesResponse {
+    /**
+     * @generated from protobuf field: repeated api.v1.Exchange exchanges = 1
+     */
+    exchanges: Exchange[];
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class Ticker$Type extends MessageType<Ticker> {
@@ -633,7 +646,8 @@ class Exchange$Type extends MessageType<Exchange> {
             { no: 1, name: "id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 2, name: "name", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 3, name: "taker_fee", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 4, name: "maker_fee", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ }
+            { no: 4, name: "maker_fee", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 5, name: "chart_color", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<Exchange>): Exchange {
@@ -642,6 +656,7 @@ class Exchange$Type extends MessageType<Exchange> {
         message.name = "";
         message.takerFee = 0;
         message.makerFee = 0;
+        message.chartColor = "";
         if (value !== undefined)
             reflectionMergePartial<Exchange>(this, message, value);
         return message;
@@ -662,6 +677,9 @@ class Exchange$Type extends MessageType<Exchange> {
                     break;
                 case /* double maker_fee */ 4:
                     message.makerFee = reader.double();
+                    break;
+                case /* string chart_color */ 5:
+                    message.chartColor = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -687,6 +705,9 @@ class Exchange$Type extends MessageType<Exchange> {
         /* double maker_fee = 4; */
         if (message.makerFee !== 0)
             writer.tag(4, WireType.Bit64).double(message.makerFee);
+        /* string chart_color = 5; */
+        if (message.chartColor !== "")
+            writer.tag(5, WireType.LengthDelimited).string(message.chartColor);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -697,3 +718,50 @@ class Exchange$Type extends MessageType<Exchange> {
  * @generated MessageType for protobuf message api.v1.Exchange
  */
 export const Exchange = new Exchange$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class ExchangesResponse$Type extends MessageType<ExchangesResponse> {
+    constructor() {
+        super("api.v1.ExchangesResponse", [
+            { no: 1, name: "exchanges", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => Exchange }
+        ]);
+    }
+    create(value?: PartialMessage<ExchangesResponse>): ExchangesResponse {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.exchanges = [];
+        if (value !== undefined)
+            reflectionMergePartial<ExchangesResponse>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: ExchangesResponse): ExchangesResponse {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* repeated api.v1.Exchange exchanges */ 1:
+                    message.exchanges.push(Exchange.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: ExchangesResponse, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* repeated api.v1.Exchange exchanges = 1; */
+        for (let i = 0; i < message.exchanges.length; i++)
+            Exchange.internalBinaryWrite(message.exchanges[i], writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message api.v1.ExchangesResponse
+ */
+export const ExchangesResponse = new ExchangesResponse$Type();
