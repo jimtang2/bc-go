@@ -24,6 +24,7 @@ var staticFiles embed.FS
 func init() {
 	viper.SetDefault("http.port", ":8080")
 	viper.SetDefault("cors.allowed_origins", []string{"http://localhost:5173"})
+	viper.SetDefault("healthcheck.last_rcv_s", 10)
 }
 
 func main() {

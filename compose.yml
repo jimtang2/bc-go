@@ -67,7 +67,7 @@ services:
       - ./deploy/config/stream:/config:ro
     restart: on-failure
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || kill 1"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -87,7 +87,7 @@ services:
       - "9000:8080"
     restart: on-failure
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || kill 1"]
       interval: 10s
       timeout: 5s
       retries: 3

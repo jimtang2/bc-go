@@ -13,6 +13,7 @@ import (
 	"github.com/jimtang2/bc-go/lib/db"
 	"github.com/jimtang2/bc-go/pkg/pb/v1"
 	_ "github.com/lib/pq"
+	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -106,7 +107,7 @@ func (handler *MatchesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
 
 func (handler *MatchesHandler) Health(ctx context.Context) error {
-	if time.Now().Sub(handler.lastRcv) > 20*time.Second {
+	if time.Now().Sub(handler.lastRcv) > time.Duration(viper.GetInt("healthcheck.last_rcv_s"))*time.Second {
 		return fmt.Errorf("stream broken")
 	}
 	return nil
@@ -225,7 +226,7 @@ func (handler *TickersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
 
 func (handler *TickersHandler) Health(ctx context.Context) error {
-	if time.Now().Sub(handler.lastRcv) > 20*time.Second {
+	if time.Now().Sub(handler.lastRcv) > time.Duration(viper.GetInt("healthcheck.last_rcv_s"))*time.Second {
 		return fmt.Errorf("stream broken")
 	}
 	return nil
