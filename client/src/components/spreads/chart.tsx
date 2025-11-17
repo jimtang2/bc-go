@@ -14,6 +14,7 @@ export function MatchesChart({ data = [], toggleConnect, setShowControls, childr
   const tooltipProps = useMemo(() => ({
 	  cursor: { fill: "#222" },
 	  content: CustomTooltip,
+	  animationDuration: 0,
   }), [])
   return (
   	<div className="relative" 
@@ -73,13 +74,15 @@ function CustomTooltip({ active, payload }: TooltipContentProps<string | number,
 		'Spread': `${spreadPct.toFixed(2)}%`,
 		'Fees': `-${(bidFeeRate + askFeeRate).toFixed(2)}%`,
 	}
-	return <table style={containerStyle} className="m-2 py-2 px-4 rounded-md border-1">
-		<tbody>
-			{Object.keys(fields).map(k =>
-				<tr key={k}>
-					<td className="flex-grow-1">{k}:</td>
-					<td className="pl-4">{fields[k]}</td>
-				</tr>)}
-		</tbody>
-	</table>
+	return <div className="m-2 p-2 rounded-md border-1" style={containerStyle}> 
+		<table>
+			<tbody>
+				{Object.keys(fields).map(k =>
+					<tr key={k}>
+						<td className="flex-grow-1">{k}:</td>
+						<td className="pl-4">{fields[k]}</td>
+					</tr>)}
+			</tbody>
+		</table>		
+	</div>
 }
