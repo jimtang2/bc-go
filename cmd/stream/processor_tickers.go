@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -22,6 +23,14 @@ type TickersProcessor struct {
 	highestBids sync.Map // string → *pb.Ticker
 	lowestAsks  sync.Map // string → *pb.Ticker
 	fees        map[string]float64
+	lastProc    time.Time // healthcheck
+}
+
+func (proc *TickersProcessor) Health(ctx context.Context) error {
+	if time.Now().Sub(proc.lastProc) > 20*time.Second {
+		return fmt.Errorf("tickers proc stale")
+	}
+	return nil
 }
 
 func NewTickersProcessor() *TickersProcessor {
@@ -61,6 +70,7 @@ func (proc *TickersProcessor) Process(m *sarama.ConsumerMessage) kafka.KMessage 
 	if match := proc.findMatch(ticker.Pair); match == nil {
 		return nil
 	} else {
+		proc.lastProc = time.Now() // healthcheck
 		return &Match{match}
 	}
 }

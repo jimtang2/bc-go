@@ -31,6 +31,10 @@ func db() *sql.DB {
 	return conn
 }
 
+func Ping() error {
+	return db().Ping()
+}
+
 func GetTrackedPairs() (pairs map[string][]string, err error) {
 	var b []byte
 	err = db().QueryRow(`select jsonb_object_agg(exchange, names) from (select exchange, array_to_json(array_agg(name)) as names from pairs group by exchange) sub`).Scan(&b)

@@ -15,7 +15,7 @@ COPY --from=client-builder /app/cmd/dashboard/dist ./cmd/dashboard/dist
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -a -installsuffix cgo -o dashboard cmd/dashboard/*.go
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates curl
 WORKDIR /app
 COPY --from=server-builder /app/server/dashboard .
 EXPOSE 8080

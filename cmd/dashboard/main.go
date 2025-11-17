@@ -43,12 +43,15 @@ func main() {
 		Processor:  NewTickersProxyProcessor(tickersHandler.channel),
 		OnKMessage: func(kmessage kafka.KMessage) {},
 	})
+	alphaHandler := &AlphaHandler{}
+	exchangesHandler := &ExchangesHandler{}
 	http.Handle("/", fs)
 	http.Handle("/alpha/", http.StripPrefix("/alpha", fs))
 	http.Handle("/ws/matches", matchesHandler)
 	http.Handle("/ws/tickers", tickersHandler)
-	http.Handle("/api/alpha", &AlphaHandler{})
-	http.Handle("/api/exchanges", &ExchangesHandler{})
+	http.Handle("/api/alpha", alphaHandler)
+	http.Handle("/api/exchanges", exchangesHandler)
+	http.Handle("/health", HealthHandler(matchesHandler, tickersHandler, alphaHandler, exchangesHandler))
 	log.Println("dashboard listening on", viper.GetString("http.port"))
 	if err := http.ListenAndServe(viper.GetString("http.port"), cors.New(cors.Options{
 		AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),

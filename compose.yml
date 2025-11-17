@@ -65,7 +65,13 @@ services:
         condition: service_healthy
     volumes:
       - ./deploy/config/stream:/config:ro
-    restart: unless-stopped
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   dashboard:
     build:
@@ -79,7 +85,13 @@ services:
       - ./deploy/config/dashboard:/config:ro
     ports:
       - "9000:8080"
-    restart: unless-stopped
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
 volumes:
   kafka_data:

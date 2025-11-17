@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/jimtang2/bc-go/lib/kafka"
 	"github.com/jimtang2/bc-go/lib/stream"
 	"github.com/jimtang2/bc-go/lib/stream/driver"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -29,8 +31,13 @@ var (
 	}
 )
 
+func init() {
+	viper.SetDefault("http.port", ":8080") // for healthcheck
+}
+
 func main() {
 	config.Read()
+	tickersProcessor := NewTickersProcessor()
 	pairsByExchange, err := db.GetTrackedPairs()
 	if err != nil {
 		log.Fatal(err)
@@ -39,6 +46,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	//
 	go func() {
 		log.Printf("[stream -> %v] on", topics[0])
 		for _, driverName := range drivers {
@@ -66,12 +74,14 @@ func main() {
 			stream.Open(driverName, driverConfig)
 		}
 	}()
+	// healthcheck notes:
+	// if tickers processing fails, it means no match is found for some amount of time, which is not expected within any sufficient period of time (> ~1-3s), in turn it means all of the stream drivers may be failing to stream tickers data; so the logic is each individual stream driver should auto restart on their own before tickers processing is deemed to have failed after x amount of time in order to deem service to be in failed state
 	go func() {
 		log.Printf("[%v -> %v/%v] on", topics[0], topics[1], topics[2])
 		kafka.ProcessStream(kafka.ProcessorConfig{
 			Topic:     topics[0],
 			Offset:    sarama.OffsetNewest,
-			Processor: NewTickersProcessor(), // computes spreads and alpha
+			Processor: tickersProcessor, // computes spreads and alpha from Topic/Offset
 			OnKMessage: func(kmessage kafka.KMessage) {
 				m, ok := kmessage.(*Match)
 				if !ok || m == nil {
@@ -101,5 +111,9 @@ func main() {
 			OnKMessage: func(kmessage kafka.KMessage) {},
 		})
 	}()
-	select {}
+
+	http.Handle("/health", HealthHandler(tickersProcessor))
+	if err := http.ListenAndServe(viper.GetString("http.port"), nil); err != nil {
+		log.Fatal(err)
+	}
 }
