@@ -170,7 +170,7 @@ func ProfitableMatches(limit, offset int) (*pb.ProfitableMatchesResponse, error)
 	return &resp, nil
 }
 
-func LogVisit(r *http.Request) error {
+func LogEvent(name string, r *http.Request) error {
 	ip := getClientIP(r)
 	path := r.URL.Path
 	if path == "" {
@@ -178,14 +178,15 @@ func LogVisit(r *http.Request) error {
 	}
 	queryString := r.URL.RawQuery
 	query := `
-		INSERT INTO visits (
-			ip_address, user_agent, referer, path, method, protocol,
+		INSERT INTO events (
+			name, ip_address, user_agent, referer, path, method, protocol,
 			host, query_string, remote_addr
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 		)
 	`
 	_, err := db().Exec(query,
+		name,
 		ip,
 		r.UserAgent(),
 		r.Referer(),

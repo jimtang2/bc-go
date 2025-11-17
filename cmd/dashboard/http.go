@@ -74,9 +74,10 @@ func (handler *MatchesHandler) unsubscribe(r *http.Request) {
 }
 
 func (handler *MatchesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if err := db.LogVisit(r); err != nil {
+	if err := db.LogEvent("connect matches", r); err != nil {
 		log.Printf("Failed to log visit: %v", err)
 	}
+	defer db.LogEvent("disconnect matches", r)
 	conn, err := handler.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Upgrade error: %v", err)
@@ -115,7 +116,7 @@ type AlphaHandler struct {
 }
 
 func (handler *AlphaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if err := db.LogVisit(r); err != nil {
+	if err := db.LogEvent("get alpha", r); err != nil {
 		log.Printf("Failed to log visit: %v", err)
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))

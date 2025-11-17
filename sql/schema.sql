@@ -135,10 +135,12 @@ CREATE TABLE IF NOT EXISTS matches (
     calc_profit_loss    DOUBLE PRECISION NOT NULL   
 );
 
-CREATE TABLE IF NOT EXISTS visits (
+CREATE TABLE IF NOT EXISTS events (
     id BIGSERIAL PRIMARY KEY,
-    visited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    name text,
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     ip_address INET,
+    geolocation TEXT,
     user_agent TEXT,
     referer TEXT,
     path TEXT NOT NULL,
@@ -148,7 +150,8 @@ CREATE TABLE IF NOT EXISTS visits (
     query_string TEXT,
     remote_addr TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_visits_visited_at ON visits(visited_at DESC);
-CREATE INDEX IF NOT EXISTS idx_visits_ip ON visits(ip_address);
-CREATE INDEX IF NOT EXISTS idx_visits_path ON visits(path);
+CREATE INDEX IF NOT EXISTS idx_events_recorded_at ON events(recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_name ON events(name);
+CREATE INDEX IF NOT EXISTS idx_events_ip ON events(ip_address);
+CREATE INDEX IF NOT EXISTS idx_events_path ON events(path);
     
